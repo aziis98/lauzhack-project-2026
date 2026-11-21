@@ -1031,10 +1031,22 @@ input:focus { background: var(--yellow); }
 	padding: 10px 14px;
 	border-bottom: var(--line);
 	background: var(--cream);
-	cursor: move;
-	touch-action: none;
 	user-select: none;
 }
+
+.debug-handle {
+	display: flex;
+	align-items: center;
+	padding: 6px 8px;
+	margin: -6px 0 -6px -6px;
+	border-radius: 8px;
+	cursor: grab;
+	touch-action: none;
+}
+
+.debug-handle:hover { background: var(--pink); }
+
+.debug-handle:active { cursor: grabbing; }
 
 .debug-head .ph { font-size: 20px; }
 
@@ -1055,12 +1067,26 @@ input:focus { background: var(--yellow); }
 .grow { flex: 1; }
 
 .debug-close {
-	padding: 4px;
-	border-radius: 6px;
-	display: flex;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border-radius: 8px;
+	border: var(--line);
+	background: var(--pink);
+	color: var(--ink);
+	font-weight: 700;
+	font-size: 13px;
+	box-shadow: var(--hard-sm);
+	transition: transform 80ms, box-shadow 80ms;
 }
 
-.debug-close:hover { background: var(--pink); }
+.debug-close:hover { background: var(--peach); }
+
+.debug-close:active {
+	transform: translate(2px, 2px);
+	box-shadow: none;
+}
 
 .debug-toggles {
 	display: flex;

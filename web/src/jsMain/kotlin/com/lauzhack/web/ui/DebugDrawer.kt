@@ -98,50 +98,46 @@ val DebugDrawer = FC<DebugDrawerProps> { props ->
         }
         asDynamic().style = css
 
-        // ---- header (drag handle) ----
+        // ---- header: only the dedicated handle drags, so buttons always work ----
         ReactHTML.div {
             className = ClassName("debug-head")
-            onPointerDown = { event: react.dom.events.PointerEvent<web.html.HTMLDivElement> ->
-                val start = Pair(event.clientX.toDouble(), event.clientY.toDouble())
-                val base = pos ?: origin.current ?: Pair(0.0, 0.0)
-                // convert the default right-anchored position to a left-anchored one
-                // so the first drag starts from where the window visually is
-                val width = 430.0
-                val baseLeft = if (pos == null) {
-                    js("window.innerWidth").unsafeCast<Double>() - width - 16.0
-                } else {
-                    base.first
-                }
-                val baseTop = if (pos == null) 72.0 else base.second
-                origin.current = Pair(baseLeft, baseTop)
+            ReactHTML.span {
+                className = ClassName("debug-handle")
+                title = "Drag to move"
+                onPointerDown = { event: react.dom.events.PointerEvent<web.html.HTMLSpanElement> ->
+                    val start = Pair(event.clientX.toDouble(), event.clientY.toDouble())
+                    val baseLeft = pos?.first
+                        ?: js("window.innerWidth").unsafeCast<Double>() - 446.0
+                    val baseTop = pos?.second ?: 72.0
+                    origin.current = Pair(baseLeft, baseTop)
 
-                val onMove: (dynamic) -> Unit = { ev: dynamic ->
-                    val nx = baseLeft + ev.clientX.unsafeCast<Double>() - start.first
-                    val ny = baseTop + ev.clientY.unsafeCast<Double>() - start.second
-                    pos = Pair(nx, ny)
+                    val onMove: (dynamic) -> Unit = { ev: dynamic ->
+                        val nx = baseLeft + ev.clientX.unsafeCast<Double>() - start.first
+                        val ny = baseTop + ev.clientY.unsafeCast<Double>() - start.second
+                        pos = Pair(nx, ny)
+                    }
+                    var onUp: (dynamic) -> Unit = { _: dynamic -> }
+                    onUp = { _: dynamic ->
+                        Window.removeEventListener("pointermove", onMove)
+                        Window.removeEventListener("pointerup", onUp)
+                    }
+                    Window.addEventListener("pointermove", onMove)
+                    Window.addEventListener("pointerup", onUp)
                 }
-                var onUp: (dynamic) -> Unit = { _: dynamic -> }
-                onUp = { _: dynamic ->
-                    Window.removeEventListener("pointermove", onMove)
-                    Window.removeEventListener("pointerup", onUp)
-                }
-                Window.addEventListener("pointermove", onMove)
-                Window.addEventListener("pointerup", onUp)
+                ReactHTML.span { className = ClassName("ph"); +"ph-dots-six-vertical" }
             }
-
             ReactHTML.span { className = ClassName("ph"); +"ph-bug" }
             ReactHTML.span { className = ClassName("debug-title"); +"Debug" }
-            ReactHTML.span { className = ClassName("debug-hint"); +"drag" }
             ReactHTML.div { className = ClassName("grow") }
             ReactHTML.button {
                 className = ClassName("debug-close")
                 title = "Close"
-                onPointerDown = { event: react.dom.events.PointerEvent<web.html.HTMLButtonElement> -> event.stopPropagation() }
                 onClick = { _ ->
                     DebugState.drawerOpen = false
                     open = false
                 }
                 ReactHTML.span { className = ClassName("ph"); +"ph-x" }
+                +" Close"
             }
         }
 
