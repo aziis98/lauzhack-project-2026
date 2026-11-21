@@ -4,28 +4,20 @@ import react.FC
 import react.Key
 import react.Props
 import react.dom.html.ReactHTML
-import react.useEffectOnce
-import react.useState
 import web.cssom.ClassName
 
 /**
  * Pipeline boxes drawn on the page in page coordinates (pointer-events: none),
- * mounted inside the same overlay as the exercise statement. Reads whatever
- * the DebugDrawer last polled from the /debug endpoint.
+ * mounted inside tldraw's OnTheCanvas slot.
  */
 val DebugLayer = FC<Props> {
-    // re-render when the drawer publishes new data or a toggle changes
-    var version by useState(0)
-    useEffectOnce {
-        DebugState.listen { version += 1 }
-    }
-
+    useDebugUpdates()
+    if (DebugState.documentId != canvasDocumentId) return@FC
     val payload = DebugState.payload ?: return@FC
 
     ReactHTML.div {
         className = ClassName("dbg-layer")
 
-        // macro-block chunk boxes
         if (DebugState.showChunkBoxes) {
             for ((index, chunk) in payload.chunks.withIndex()) {
                 val b = chunk.bounds
@@ -46,7 +38,6 @@ val DebugLayer = FC<Props> {
             }
         }
 
-        // segmenter fragments + model-returned bboxes per chunk
         for (ocrChunk in payload.ocr.chunks) {
             if (DebugState.showFragmentBoxes) {
                 for (box in ocrChunk.fragmentBoxes) {

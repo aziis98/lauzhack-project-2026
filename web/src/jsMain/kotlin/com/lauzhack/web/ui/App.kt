@@ -246,10 +246,12 @@ val App = FC<Props> {
                 }
             }
 
-            // ?debug: pipeline inspector — poller (always on when debug mode) + floating window
+            // The inspector polls while mounted, even when its window is closed.
             if (debugMode) {
-                DebugPoller { documentId = openId }
-                DebugDrawer { documentId = openId }
+                DebugDrawer {
+                    key = Key(openId)
+                    documentId = openId
+                }
             }
         }
     }

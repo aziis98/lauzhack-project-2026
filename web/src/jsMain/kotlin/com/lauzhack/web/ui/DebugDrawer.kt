@@ -4,54 +4,21 @@ import com.lauzhack.shared.api.DrawingApi
 import com.lauzhack.shared.debug.DebugPayload
 import com.lauzhack.shared.ocr.stripBboxes
 import com.lauzhack.web.markdown.renderMathMarkdown
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import react.FC
 import react.Key
 import react.Props
 import react.dom.html.ReactHTML
 import react.useEffect
-import react.useEffectOnce
 import react.useRef
 import react.useState
 import web.cssom.ClassName
 
 private val debugApi = DrawingApi()
-private val debugScope = CoroutineScope(Dispatchers.Default)
-internal var debugJob: Job? = null
-
-/**
- * Starts/stops the /debug poller — mounted once when ?debug is active,
- * regardless of whether the drawer window is open, so the canvas overlay
- * boxes appear immediately.
- */
-val DebugPoller = FC<DebugPollerProps> { props ->
-    var hasData by useState(false)
-    useEffect(props.documentId) {
-        debugJob?.cancel()
-        debugJob = debugScope.launch {
-            while (isActive) {
-                val payload = runCatching { debugApi.debug(props.documentId) }.getOrNull()
-                if (payload != null && DebugState.payload != payload) {
-                    DebugState.payload = payload
-                    DebugState.notifyChanged()
-                }
-                if (payload != null && !hasData) hasData = true
-                delay(2500)
-            }
-        }
-        debugJob // keep the reference alive for GC clarity
-    }
-    null
-}
-
-external interface DebugPollerProps : Props {
-    var documentId: String
-}
 
 external interface DebugDrawerProps : Props {
     var documentId: String
@@ -84,24 +51,49 @@ private fun kindBadgeClass(kind: String?): String = when (kind) {
 /**
  * Floating pipeline inspector window (?debug). Hidden at first: only a 🐛 tab
  * floats top-right; clicking it opens a draggable, closable window. Polling
- * lives in [DebugPoller] (always on with ?debug), so the canvas boxes render
- * even with the window hidden.
+ * continues with the window hidden so canvas boxes remain up to date.
  */
 val DebugDrawer = FC<DebugDrawerProps> { props ->
     var open by useState(DebugState.drawerOpen)
     var showPrompts by useState(false)
     var expanded by useState<String?>(null)
-    var version by useState(0)
+    val refreshRequests by useState { Channel<Unit>(Channel.CONFLATED) }
+    useDebugUpdates()
 
-    // re-render whenever the poller publishes new data (same channel as the canvas layer)
-    useEffectOnce {
-        DebugState.listen { version += 1 }
+    // This wrapper's effect coroutine is cancelled on document change/unmount.
+    // Refresh wakes the same loop, so requests cannot race each other.
+    useEffect(props.documentId) {
+        val documentId = props.documentId
+        DebugState.reset(documentId)
+        try {
+            while (true) {
+                try {
+                    val next = debugApi.debug(documentId)
+                    currentCoroutineContext().ensureActive()
+                    if (next == null) {
+                        DebugState.error = "Could not load pipeline. Retrying…"
+                        DebugState.notifyChanged()
+                    } else if (DebugState.payload != next || DebugState.error != null) {
+                        DebugState.payload = next
+                        DebugState.error = null
+                        DebugState.notifyChanged()
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    DebugState.error = "Could not load pipeline. Retrying…"
+                    DebugState.notifyChanged()
+                }
+                withTimeoutOrNull(2500L) { refreshRequests.receive() }
+            }
+        } finally {
+            if (DebugState.documentId == documentId) DebugState.reset(null)
+        }
     }
 
     // window position (page px); null until the user drags it
     var pos by useState<Pair<Double, Double>?>(null)
     val origin = useRef(Pair(0.0, 0.0))
-
     if (!open) {
         ReactHTML.button {
             className = ClassName("debug-tab")
@@ -115,7 +107,7 @@ val DebugDrawer = FC<DebugDrawerProps> { props ->
         return@FC
     }
 
-    val payload = DebugState.payload
+    val payload = DebugState.payload.takeIf { DebugState.documentId == props.documentId }
 
     ReactHTML.div {
         className = ClassName("debug-window")
@@ -200,16 +192,26 @@ val DebugDrawer = FC<DebugDrawerProps> { props ->
                     active = showPrompts
                     onToggle = { showPrompts = it }
                 }
+                ReactHTML.button {
+                    className = ClassName("debug-toggle")
+                    onClick = { _ -> refreshRequests.trySend(Unit) }
+                    ReactHTML.span { className = ClassName("ph"); +"ph-arrows-clockwise" }
+                    +" refresh"
+                }
             }
 
-            if (payload == null) {
+            if (DebugState.error != null) {
+                ReactHTML.div { className = ClassName("debug-empty"); +DebugState.error!! }
+            }
+            if (payload == null && DebugState.error == null) {
                 ReactHTML.div { className = ClassName("debug-empty"); +"Loading pipeline…" }
-            } else {
+            }
+            if (payload != null) {
             // ================ OCR (top section) ================
             DebugOcrSection {
                 this.payload = payload
                 documentId = props.documentId
-                showPrompts = showPrompts
+                this.showPrompts = showPrompts
                 expandedChunk = expanded
                 onExpand = { id -> expanded = if (expanded == id) null else id }
             }
@@ -217,7 +219,7 @@ val DebugDrawer = FC<DebugDrawerProps> { props ->
             // ================ Agent conversation ================
             DebugAgentSection {
                 this.payload = payload
-                showPrompts = showPrompts
+                this.showPrompts = showPrompts
             }
 
             // ================ Hints ================
