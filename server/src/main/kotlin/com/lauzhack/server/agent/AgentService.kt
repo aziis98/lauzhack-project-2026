@@ -127,6 +127,9 @@ class AgentService(
             // buffered changes retry with the next delta instead of being lost
             var userMessage: String? = null
             var history: List<ConversationMessage> = emptyList()
+            var sentAdded: List<PageChunk> = emptyList()
+            var sentModified: List<PageChunk> = emptyList()
+            var sentRemoved: List<String> = emptyList()
             s.mutex.withLock {
                 if (self?.isCancelled == true) return
                 if (!s.bootstrapped) {
@@ -144,11 +147,10 @@ class AgentService(
                 } else if (s.pendingAdded.isEmpty() && s.pendingModified.isEmpty() && s.pendingRemoved.isEmpty()) {
                     return // nothing new since the last turn
                 } else {
-                    val delta = PageDelta(
-                        added = s.pendingAdded.values.toList(),
-                        modified = s.pendingModified.values.toList(),
-                        removed = s.pendingRemoved.toList(),
-                    )
+                    sentAdded = s.pendingAdded.values.toList()
+                    sentModified = s.pendingModified.values.toList()
+                    sentRemoved = s.pendingRemoved.toList()
+                    val delta = PageDelta(added = sentAdded, modified = sentModified, removed = sentRemoved)
                     userMessage = json.encodeToString(delta)
                 }
                 history = s.history.toList()
@@ -156,8 +158,12 @@ class AgentService(
 
             val output = agent.converse(history, userMessage!!)
 
-            // success: commit the turn (the buffer already holds only post-message changes)
+            // success: commit the turn and consume exactly what was sent — entries that
+            // changed AGAIN during the model call stay buffered for the next delta
             s.mutex.withLock {
+                for (c in sentAdded) if (s.pendingAdded[c.id] == c) s.pendingAdded.remove(c.id)
+                for (c in sentModified) if (s.pendingModified[c.id] == c) s.pendingModified.remove(c.id)
+                for (id in sentRemoved) s.pendingRemoved.remove(id)
                 s.history.add(ConversationMessage("user", userMessage))
                 s.history.add(ConversationMessage("assistant", json.encodeToString(output)))
                 trim(s.history)
