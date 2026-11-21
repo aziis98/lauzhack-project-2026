@@ -59,8 +59,27 @@ fun Element.toStrokeShapeOrNull(): StrokeShape? {
     )
 }
 
+/**
+ * The stroke's segments as page-space polylines, each flattened as
+ * [x1, y1, x2, y2, ...]. Empty for non-stroke elements.
+ */
+fun Element.toPageSpacePolylines(): List<DoubleArray> {
+    val stroke = data as? ElementData.Stroke ?: return emptyList()
+    val c = cos(rotation)
+    val s = sin(rotation)
+    return stroke.segments.map { segment ->
+        val pts = segment.points
+        DoubleArray(pts.size - pts.size % 2) { k ->
+            val i = k - k % 2
+            val lx = pts[i]
+            val ly = pts[i + 1]
+            if (k % 2 == 0) x + lx * c - ly * s else y + lx * s + ly * c
+        }
+    }.filter { it.isNotEmpty() }
+}
+
 /** Approximate pen width for the size classes used by the web editor. */
-internal fun penWidth(size: String?): Double = when (size) {
+fun penWidth(size: String?): Double = when (size) {
     "s" -> 2.0
     "m" -> 3.5
     "l" -> 5.0

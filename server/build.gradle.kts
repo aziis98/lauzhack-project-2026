@@ -20,6 +20,9 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.54.1.0")
     implementation("ch.qos.logback:logback-classic:1.6.3")
 
+    // AI agents (OCR + reasoning) — https://github.com/JetBrains/koog
+    implementation("ai.koog:koog-agents:1.3.0")
+
     testImplementation(kotlin("test"))
     testImplementation("io.ktor:ktor-server-test-host:$ktor")
 }
@@ -29,6 +32,8 @@ application {
 }
 
 kotlin {
+    // Gradle provisions a full JDK 21 (via the foojay resolver) when none is installed.
+    jvmToolchain(21)
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
     }

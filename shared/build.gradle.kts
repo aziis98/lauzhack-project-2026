@@ -4,6 +4,7 @@ plugins {
 }
 
 kotlin {
+    jvmToolchain(21)
     jvm {
         compilerOptions {
             jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21

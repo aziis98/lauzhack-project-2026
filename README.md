@@ -66,9 +66,29 @@ as modified, so downstream OCR/AI only re-processes what the user touched.
 GET    /api/documents/{id}/chunks    [{ id, strokeIds, bounds, contentHash, version }]   (debug/inspection)
 ```
 
-Inside the server, consumers (OCR, reasoning agent) subscribe to
-`ChunkService.updates(docId)`, which pushes `{ added, modified, removed }` after
-every write.
+Inside the server, consumers subscribe to `ChunkService.events`, which pushes
+`{ added, modified, removed }` (plus the strokes of changed chunks) after every write.
+
+### OCR
+
+Every added/modified chunk is rendered to a PNG on the server and transcribed by a
+light vision model on [Together AI](https://www.together.ai)
+(`deepseek-ai/DeepSeek-V4.1-Flash-1017` by default) through
+[Koog](https://github.com/JetBrains/koog). The result is `{ kind, content }` with
+`kind` one of `MATH | TEXT | QUESTION_MARK | DRAWING | UNREADABLE` and `content`
+in LaTeX. Results are cached by chunk content hash and debounced (1 s) while a
+block is being written; `OcrService.events` streams them to the reasoning agent.
+
+```sh
+export TOGETHER_API_KEY=...      # OCR (optional: without it chunks stay pending)
+export ANTHROPIC_API_KEY=...     # reasoning model (not used yet)
+./gradlew :server:run
+```
+
+```
+GET    /api/documents/{id}/transcription               [{ chunk, transcription | null }]   (debug)
+GET    /api/documents/{id}/chunks/{chunkId}/image.png  image sent to the OCR model        (debug)
+```
 
 Elements are polymorphic via the `kind` discriminator:
 
