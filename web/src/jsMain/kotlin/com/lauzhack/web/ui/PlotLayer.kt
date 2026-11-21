@@ -1,0 +1,312 @@
+package com.lauzhack.web.ui
+
+import com.lauzhack.shared.agent.AgentAction
+import com.lauzhack.shared.agent.PlotInterval
+import com.lauzhack.shared.agent.PlotWithAnchor
+import com.lauzhack.shared.api.DrawingApi
+import kotlinx.coroutines.delay
+import kotlin.math.pow
+import react.FC
+import react.Key
+import react.Props
+import react.dom.html.ReactHTML
+import react.useState
+import react.useEffectOnce
+import web.cssom.ClassName
+
+private val plotApi = DrawingApi()
+
+private const val POLL_MILLIS = 1500L
+internal const val PLOT_PANEL_WIDTH = 340.0
+internal const val PLOT_PANEL_HEIGHT = 240.0
+private const val BTN_GAP = 12.0
+
+/**
+ * The plot actions of the page agent: for each active plot a popup button
+ * appears anchored near the chunk that defined the function; clicking it opens
+ * a draggable SVG panel where KOTLIN samples the JS expression over the domain
+ * and draws the curve, marking the points the STUDENT computed on the page
+ * (never points invented by the model or computed by us).
+ */
+val PlotLayer = FC<Props> {
+    var plots by useState<List<PlotWithAnchor>>(emptyList())
+
+    useEffectOnce {
+        val documentId = canvasDocumentId ?: return@useEffectOnce
+        var last: List<PlotWithAnchor>? = null
+        while (true) {
+            runCatching { plotApi.getPlots(documentId) }
+                .onSuccess { if (it != last) { last = it; plots = it } }
+            delay(POLL_MILLIS)
+        }
+    }
+
+    for (entry in plots) {
+        PlotEntry {
+            key = Key(entry.plot.id)
+            this.entry = entry
+        }
+    }
+}
+
+private external interface PlotEntryProps : Props {
+    var entry: PlotWithAnchor
+}
+
+private val PlotEntry = FC<PlotEntryProps> { props ->
+    val plot = props.entry.plot
+    var open by useState(false)
+    var dragged by useState<Pair<Double, Double>?>(null)
+
+    val anchor = props.entry.anchor
+    // right of the defining chunk, or a fallback spot under the exercise statement
+    val btnLeft = if (anchor != null) anchor.maxX + BTN_GAP else 64.0
+    val btnTop = if (anchor != null) anchor.minY else 160.0
+    val (panelLeft, panelTop) = dragged ?: (btnLeft to btnTop + 44.0)
+
+    val fnName = plot.functionName ?: "f"
+
+    ReactHTML.button {
+        className = ClassName("plot-btn")
+        val css: dynamic = js("({})")
+        css.left = "${btnLeft}px"
+        css.top = "${btnTop}px"
+        asDynamic().style = css
+        onClick = { open = !open }
+        ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
+        +"Plot $fnName(${plot.variable})"
+    }
+
+    if (open) {
+        ReactHTML.div {
+            className = ClassName("plot-card")
+            val css: dynamic = js("({})")
+            css.left = "${panelLeft}px"
+            css.top = "${panelTop}px"
+            css.width = "${PLOT_PANEL_WIDTH}px"
+            asDynamic().style = css
+
+            // drag the panel like a hint card; its buttons are left alone
+            onPointerDown = { event ->
+                event.stopPropagation() // never start a stroke under the panel
+                val target: dynamic = event.target
+                if (target.closest("button") == null) {
+                    event.preventDefault()
+                    val zoom = canvasEditor?.getZoomLevel() ?: 1.0
+                    val startX = event.clientX
+                    val startY = event.clientY
+                    var pos = panelLeft to panelTop
+                    val win: dynamic = js("window")
+                    lateinit var onMove: (dynamic) -> Unit
+                    lateinit var onUp: (dynamic) -> Unit
+                    onMove = { e ->
+                        pos = (panelLeft + (e.clientX as Double - startX) / zoom) to
+                            (panelTop + (e.clientY as Double - startY) / zoom)
+                        dragged = pos
+                    }
+                    onUp = { _ ->
+                        win.removeEventListener("pointermove", onMove)
+                        win.removeEventListener("pointerup", onUp)
+                    }
+                    win.addEventListener("pointermove", onMove)
+                    win.addEventListener("pointerup", onUp)
+                }
+            }
+
+            ReactHTML.div {
+                className = ClassName("plot-head")
+                ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
+                ReactHTML.span {
+                    className = ClassName("plot-expr")
+                    +"$fnName(${plot.variable}) = ${plot.expression}"
+                }
+                ReactHTML.button {
+                    className = ClassName("hint-close")
+                    title = "Close"
+                    asDynamic()["aria-label"] = "Close plot"
+                    onClick = { open = false }
+                    +"✕"
+                }
+            }
+
+            PlotSvg { this.plot = plot }
+        }
+    }
+}
+
+// ---------------------------------------------------------------
+// The SVG: Kotlin computes the geometry AND builds the markup
+// ---------------------------------------------------------------
+
+private external interface PlotSvgProps : Props {
+    var plot: AgentAction.PlotAction
+}
+
+private val PlotSvg = FC<PlotSvgProps> { props ->
+    val svg = buildPlotSvg(props.plot, width = PLOT_PANEL_WIDTH - 24.0, height = PLOT_PANEL_HEIGHT)
+    if (svg == null) {
+        ReactHTML.p { className = ClassName("plot-error"); +"Cannot plot this expression" }
+        return@FC
+    }
+    ReactHTML.div {
+        className = ClassName("plot-svg")
+        val inner: dynamic = js("({})")
+        inner.__html = svg
+        asDynamic().dangerouslySetInnerHTML = inner
+    }
+}
+
+// ---------------------------------------------------------------
+// Geometry + SVG markup (pure Kotlin string building)
+// ---------------------------------------------------------------
+
+internal class Tick(val value: Double, val screen: Double)
+
+/** Builds the whole `<svg>…</svg>` for the plot; null when the expression is unusable. */
+internal fun buildPlotSvg(plot: AgentAction.PlotAction, width: Double, height: Double): String? {
+    val f = compileExpression(plot.expression, plot.variable) ?: return null
+    val intervals = plot.domain.filter { it.to > it.from }
+        .ifEmpty { listOf(PlotInterval(-5.0, 5.0)) }
+    val x0 = intervals.minOf { it.from }
+    val x1 = intervals.maxOf { it.to }
+
+    val padL = 36.0
+    val padR = 10.0
+    val padT = 8.0
+    val padB = 22.0
+
+    // sample each interval, breaking the curve at non-finite values
+    val samples = 400
+    data class Pt(val x: Double, val y: Double)
+    val curves = mutableListOf<List<Pt>>()
+    for (iv in intervals) {
+        var cur = mutableListOf<Pt>()
+        for (i in 0..samples) {
+            val x = iv.from + (iv.to - iv.from) * i / samples
+            val y = f(x)
+            if (y != null && y.isFinite()) cur.add(Pt(x, y)) else {
+                if (cur.size > 1) curves.add(cur)
+                cur = mutableListOf()
+            }
+        }
+        if (cur.size > 1) curves.add(cur)
+    }
+    if (curves.isEmpty()) return null
+
+    // y-range from finite samples, percentile-clamped against asymptotes
+    val sorted = curves.flatten().map { it.y }.sorted()
+    var y0 = sorted[(sorted.size * 0.02).toInt().coerceIn(sorted.indices)]
+    var y1 = sorted[((sorted.size * 0.98).toInt()).coerceIn(sorted.indices)]
+    if (y1 - y0 < 1e-9) { y0 -= 1.0; y1 += 1.0 }
+    val padY = (y1 - y0) * 0.08
+    y0 -= padY
+    y1 += padY
+
+    fun sx(x: Double) = padL + (x - x0) / (x1 - x0) * (width - padL - padR)
+    fun sy(y: Double) = height - padB - (y - y0) / (y1 - y0) * (height - padT - padB)
+    fun syClamped(y: Double) = sy(y).coerceIn(0.0, height)
+
+    val sb = StringBuilder()
+    sb.append("<svg width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\" xmlns=\"http://www.w3.org/2000/svg\">")
+
+    // grid + tick labels
+    for (t in niceTicks(x0, x1, 6) { sx(it) }) {
+        sb.append("<line x1=\"${fmt(t.screen)}\" y1=\"0\" x2=\"${fmt(t.screen)}\" y2=\"${fmt(height)}\" stroke=\"#e7e2d8\" stroke-width=\"1\"/>")
+        sb.append("<text x=\"${fmt(t.screen - 8)}\" y=\"${fmt(height - 6)}\" fill=\"#555\" font-size=\"9.5\">${fmt(t.value)}</text>")
+    }
+    for (t in niceTicks(y0, y1, 4) { sy(it) }) {
+        sb.append("<line x1=\"0\" y1=\"${fmt(t.screen)}\" x2=\"${fmt(width)}\" y2=\"${fmt(t.screen)}\" stroke=\"#e7e2d8\" stroke-width=\"1\"/>")
+        sb.append("<text x=\"2\" y=\"${fmt(t.screen + 3)}\" fill=\"#555\" font-size=\"9.5\">${fmt(t.value)}</text>")
+    }
+
+    // axes on zero when visible, else on the frame
+    val axisY = if (y0 <= 0.0 && y1 >= 0.0) sy(0.0) else height - padB
+    val axisX = if (x0 <= 0.0 && x1 >= 0.0) sx(0.0) else padL
+    sb.append("<line x1=\"0\" y1=\"${fmt(axisY)}\" x2=\"${fmt(width)}\" y2=\"${fmt(axisY)}\" stroke=\"#55504a\" stroke-width=\"1.2\"/>")
+    sb.append("<line x1=\"${fmt(axisX)}\" y1=\"0\" x2=\"${fmt(axisX)}\" y2=\"${fmt(height)}\" stroke=\"#55504a\" stroke-width=\"1.2\"/>")
+
+    // the curve
+    sb.append("<path d=\"")
+    for (curve in curves) {
+        curve.forEachIndexed { i, p ->
+            if (i == 0) sb.append("M ${fmt(sx(p.x))} ${fmt(syClamped(p.y))}")
+            else sb.append(" L ${fmt(sx(p.x))} ${fmt(syClamped(p.y))}")
+        }
+    }
+    sb.append("\" fill=\"none\" stroke=\"#1a5fb4\" stroke-width=\"2.2\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>")
+
+    // the points the STUDENT computed; y evaluated only when they wrote just the x
+    for (p in plot.points) {
+        if (p.x < x0 || p.x > x1) continue
+        val y = p.y ?: f(p.x) ?: continue
+        if (y < y0 || y > y1) continue
+        val cx = fmt(sx(p.x))
+        val cy = fmt(sy(y))
+        sb.append("<circle cx=\"$cx\" cy=\"$cy\" r=\"4\" fill=\"#c62828\"/>")
+        val label = "(${fmt(p.x)}, ${fmt(y)})${p.label?.let { " $it" } ?: ""}"
+        sb.append("<text x=\"${fmt(sx(p.x) + 6)}\" y=\"${fmt(sy(y) - 6)}\" fill=\"#c62828\" font-size=\"10\" font-weight=\"700\">")
+        sb.append(label.xmlEscape())
+        sb.append("</text>")
+    }
+
+    sb.append("</svg>")
+    return sb.toString()
+}
+
+private fun String.xmlEscape(): String =
+    replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+
+/** 1-2-5 nice ticks across `[lo, hi]`. */
+private fun niceTicks(lo: Double, hi: Double, count: Int, screen: (Double) -> Double): List<Tick> {
+    val raw = (hi - lo) / count
+    val mag = 10.0.pow(kotlin.math.floor(kotlin.math.log10(raw)))
+    val step = listOf(1.0, 2.0, 5.0, 10.0).map { it * mag }.firstOrNull { it >= raw } ?: mag * 10
+    val first = kotlin.math.ceil(lo / step) * step
+    val out = ArrayList<Tick>()
+    var v = first
+    while (v <= hi + 1e-9) {
+        out.add(Tick(v, screen(v)))
+        v += step
+    }
+    return out
+}
+
+private fun fmt(v: Double): String {
+    if (kotlin.math.abs(v) < 1e-10) return "0"
+    if (v == kotlin.math.floor(v) && kotlin.math.abs(v) < 1e9) return v.toInt().toString()
+    return fmt3(v)
+}
+
+private fun fmt3(v: Double): String = js("Number(v.toPrecision(3)).toString()")
+
+// ---------------------------------------------------------------
+// Evaluation: the model's JS expression, computed from Kotlin
+// ---------------------------------------------------------------
+
+/** Compiles the JS expression to a function of the variable; null when unsafe. */
+internal fun compileExpression(expression: String, variable: String): ((Double) -> Double?)? {
+    if (!expressionIsSafe(expression, variable)) return null
+    val f: dynamic = makeJsFunction(variable, expression)
+    return { x -> (f(x) as? Number)?.toDouble() }
+}
+
+private fun makeJsFunction(variable: String, expr: String): dynamic =
+    js("new Function(variable, 'return (' + expr + ');')")
+
+private val KNOWN_MATH = setOf(
+    "sqrt", "abs", "exp", "log", "sin", "cos", "tan", "asin", "acos", "atan",
+    "pow", "min", "max", "floor", "ceil", "round", "sign", "PI", "E",
+)
+
+/** Whitelist: Math.<known> tokens, the variable, numbers and arithmetic only. */
+internal fun expressionIsSafe(expr: String, variable: String): Boolean {
+    if (expr.isEmpty() || expr.length > 300) return false
+    Regex("""Math\.([A-Za-z]+)""").findAll(expr).forEach {
+        if (it.groupValues[1] !in KNOWN_MATH) return false
+    }
+    val withoutMath = expr.replace(Regex("""Math\.[A-Za-z]+"""), "")
+    val withoutVar = withoutMath.replace(Regex("""\b${Regex.escape(variable)}\b"""), "")
+    if (Regex("""[A-Za-z_$]""").containsMatchIn(withoutVar)) return false
+    if (Regex("""[;={}[\]`'"<>?!&|:,]""").containsMatchIn(withoutVar)) return false
+    return true
+}

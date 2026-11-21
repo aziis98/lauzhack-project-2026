@@ -1,5 +1,6 @@
 package com.lauzhack.shared.api
 
+import com.lauzhack.shared.agent.PlotWithAnchor
 import com.lauzhack.shared.domain.Document
 import com.lauzhack.shared.domain.Element
 import com.lauzhack.shared.dto.CreateDocumentRequest
@@ -67,6 +68,10 @@ class DrawingApi(
     /** Hints answering the circled "?" drawn on the page. */
     suspend fun getHints(documentId: String): List<Hint> =
         client.get("$api/documents/$documentId/hints").body()
+
+    /** The plots the page agent currently proposes for the document. */
+    suspend fun getPlots(documentId: String): List<PlotWithAnchor> =
+        client.get("$api/documents/$documentId/plots").body()
 
     /** Asks for a hint without drawing a circled "?" (toolbar button). */
     suspend fun requestHint(documentId: String): Boolean =

@@ -153,7 +153,7 @@ class KoogPageAgent(
             2. PLOT — a function definition should be visualized.
                { "kind": "plot", "id": "plot-<source chunk id>", "functionName": "f",
                  "variable": "x", "expression": "<JavaScript>",
-                 "domain": [ { "from": -1, "to": 1 } ] }
+                 "domain": [ { "from": -1, "to": 1 } ], "points": [ { "x": 0.707, "y": 1, "label": "max" } ] }
 
                - Emit when a chunk DEFINES a function (name(var) = <math>). Re-emit with the
                  SAME id when the definition changes; withdraw with "remove": true when the
@@ -172,6 +172,12 @@ class KoogPageAgent(
                    it with an ERROR action.
                - domain: the window that best shows the definition; prefer the natural domain
                  (Math.sqrt(1-x*x) -> [-1, 1]); about [-5, 5] when nothing is special.
+               - points: the special points THE STUDENT COMPUTED about this function on
+                 the page — zeros, critical points, extrema, evaluated values — extracted
+                 from the transcribed work, closed forms converted to numbers (1/√2 -> 0.707).
+                 "y" may be omitted when the student only wrote the x. Only points the
+                 student actually computed: never compute or invent points yourself, and
+                 leave "points" empty when they computed none.
 
             3. ERROR — a clear mathematical mistake in the student's work.
                { "kind": "error", "id": "error-<n>", "chunkId": "<the chunk with the mistake>",

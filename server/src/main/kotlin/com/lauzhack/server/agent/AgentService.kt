@@ -9,6 +9,7 @@ import com.lauzhack.shared.agent.ConversationMessage
 import com.lauzhack.shared.agent.PageChunk
 import com.lauzhack.shared.agent.PageDelta
 import com.lauzhack.shared.agent.PageSnapshot
+import com.lauzhack.shared.agent.PlotWithAnchor
 import com.lauzhack.shared.hint.HintCard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -215,25 +216,41 @@ class AgentService(
     private suspend fun apply(documentId: String, page: List<com.lauzhack.shared.ocr.TranscribedChunk>, output: AgentOutput) {
         val byId = page.associateBy { it.chunk.id }
         for (action in output.actions) {
-            if (action is AgentAction.HintAction) {
-                val trigger = byId[action.triggerChunkId] ?: continue
-                val hintId = hints.request(
-                    documentId = documentId,
-                    triggerChunkId = action.triggerChunkId,
-                    contentHash = trigger.chunk.contentHash,
-                    anchor = trigger.chunk.bounds,
-                ) ?: continue // already answered or dismissed for this exact circled "?"
-                hints.complete(
-                    documentId = documentId,
-                    hintId = hintId,
-                    card = HintCard(
-                        title = action.title.trim(),
-                        message = action.message.trim(),
-                        steps = action.steps.map { it.trim() }.filter { it.isNotEmpty() },
-                        relatedChunkIds = action.relatedChunkIds,
-                    ),
-                )
-                log.info("doc {}: hint {} for {}", documentId, hintId, action.triggerChunkId)
+            when (action) {
+                is AgentAction.HintAction -> {
+                    val trigger = byId[action.triggerChunkId] ?: continue
+                    val hintId = hints.request(
+                        documentId = documentId,
+                        triggerChunkId = action.triggerChunkId,
+                        contentHash = trigger.chunk.contentHash,
+                        anchor = trigger.chunk.bounds,
+                    ) ?: continue // already answered or dismissed for this exact circled "?"
+                    hints.complete(
+                        documentId = documentId,
+                        hintId = hintId,
+                        card = HintCard(
+                            title = action.title.trim(),
+                            message = action.message.trim(),
+                            steps = action.steps.map { it.trim() }.filter { it.isNotEmpty() },
+                            relatedChunkIds = action.relatedChunkIds,
+                        ),
+                    )
+                    log.info("doc {}: hint {} for {}", documentId, hintId, action.triggerChunkId)
+                }
+
+                is AgentAction.PlotAction -> {
+                    if (action.remove) {
+                        removePlot(documentId, action.id)
+                        log.info("doc {}: plot {} withdrawn", documentId, action.id)
+                    } else {
+                        // anchor where the function was defined: "plot-<chunkId>"
+                        val anchor = byId[action.id.removePrefix("plot-")]?.chunk?.bounds
+                        putPlot(documentId, PlotWithAnchor(action, anchor))
+                        log.info("doc {}: plot {} on {} (+{} point(s))", documentId, action.id, action.expression, action.points.size)
+                    }
+                }
+
+                is AgentAction.ErrorAction -> Unit // not rendered yet
             }
         }
     }
@@ -261,5 +278,24 @@ class AgentService(
 
     fun forget(documentId: String) {
         docs.remove(documentId)?.job?.cancel()
+        synchronized(plotRegistry) { plotRegistry.remove(documentId) }
     }
+
+    // ---------------------------------------------------------------
+    // Plots: the active set per document (add/replace by id, remove-aware)
+    // ---------------------------------------------------------------
+
+    private val plotRegistry = java.util.concurrent.ConcurrentHashMap<String, LinkedHashMap<String, PlotWithAnchor>>()
+
+    /** The plots currently active for the document, in answer order. */
+    fun plots(documentId: String): List<PlotWithAnchor> =
+        synchronized(plotRegistry) { plotRegistry[documentId]?.values?.toList() ?: emptyList() }
+
+    private fun putPlot(documentId: String, entry: PlotWithAnchor) =
+        synchronized(plotRegistry) {
+            plotRegistry.getOrPut(documentId) { LinkedHashMap() }[entry.plot.id] = entry
+        }
+
+    private fun removePlot(documentId: String, id: String) =
+        synchronized(plotRegistry) { plotRegistry[documentId]?.remove(id) }
 }

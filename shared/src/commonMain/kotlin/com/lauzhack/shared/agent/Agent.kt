@@ -67,6 +67,8 @@ sealed interface AgentAction {
         /** JavaScript the client can evaluate directly, e.g. `2*x*Math.sqrt(1-x*x)`. */
         val expression: String,
         val domain: List<PlotInterval> = listOf(PlotInterval(-5.0, 5.0)),
+        /** The special points the STUDENT computed about this function on the page. */
+        val points: List<PlotPoint> = emptyList(),
         /** Withdraw a previously emitted plot with the same id. */
         val remove: Boolean = false,
     ) : AgentAction
@@ -85,6 +87,26 @@ sealed interface AgentAction {
 
 @Serializable
 data class PlotInterval(val from: Double, val to: Double)
+
+/**
+ * A point the student computed about a function (zero, critical point, extremum,
+ * evaluated value) — extracted from their work by the model, rendered on the plot.
+ *
+ * @property y null when the student only wrote the x: the client evaluates it
+ */
+@Serializable
+data class PlotPoint(
+    val x: Double,
+    val y: Double? = null,
+    val label: String? = null,
+)
+
+/** A plot action plus the bounds of the chunk that defined the function, if known. */
+@Serializable
+data class PlotWithAnchor(
+    val plot: AgentAction.PlotAction,
+    val anchor: com.lauzhack.shared.chunking.BoundingBox? = null,
+)
 
 /** One stored turn of the per-document conversation. */
 @kotlinx.serialization.Serializable

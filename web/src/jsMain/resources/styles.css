@@ -623,6 +623,57 @@ input:focus {
 
 .tool.help { background: var(--lilac); border: var(--line); font-weight: 800; }
 
+/* The moving-camera hit-test blocker never goes idle with our scrolling-document
+   camera (cameraConstraints + wheelBehavior: pan), so it would sit above the
+   shapes layer forever and swallow every real click on overlay content — hint
+   cards and plot buttons included. Our overlays own their pointer events
+   (stopPropagation on pointerdown), so the blocker is unnecessary here. */
+.tl-hit-test-blocker { display: none !important; }
+
+/* tldraw gives .tl-canvas `content-visibility: auto`; in this app it culls the
+   entire subtree from HIT-TESTING while still painting it — everything inside
+   the canvas (hint cards, plot buttons) paints but never receives real clicks.
+   Our canvas is always on screen, so visibility culling buys nothing here. */
+.tl-canvas { content-visibility: visible !important; }
+
+/* =====================================================================
+   Plot button + panel (the page agent's plot actions)
+   ===================================================================== */
+.plot-btn {
+	position: absolute;
+	pointer-events: all;
+	display: flex; align-items: center; gap: 6px;
+	padding: 8px 12px;
+	background: var(--mint);
+	border: var(--line);
+	border-radius: var(--radius);
+	box-shadow: var(--hard);
+	font-weight: 700; font-size: 13px; color: var(--ink);
+	cursor: pointer;
+	z-index: 2147483000; /* above every stroke, like the hint cards */
+}
+.plot-btn:hover { background: var(--lilac); }
+.plot-btn:active { transform: translate(2px, 2px); box-shadow: none; }
+
+.plot-card {
+	position: absolute;
+	pointer-events: all;
+	background: var(--cream);
+	border: var(--line);
+	border-radius: var(--radius);
+	box-shadow: var(--hard);
+	z-index: 2147483000;
+	cursor: grab;
+	user-select: none;
+	touch-action: none;
+	padding: 10px 12px 8px;
+}
+.plot-card:active { cursor: grabbing; }
+.plot-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.plot-head .ph { font-size: 16px; }
+.plot-expr { flex: 1; font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 12px; font-weight: 600; }
+.plot-error { color: #c92a2a; font-size: 13px; margin: 4px 0; }
+
 .hint-message { margin: 8px 0 0; }
 .hint-steps { margin: 6px 0 0; padding-left: 18px; color: #52525b; }
 .hint-steps li { margin-top: 2px; }
