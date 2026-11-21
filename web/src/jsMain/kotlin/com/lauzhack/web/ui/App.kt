@@ -38,39 +38,22 @@ val App = FC<Props> {
     // ---- routing: interpret a URL path into app state ----
     fun handleUrlPath(path: String, replaceUrl: Boolean) {
         val short = shortIdFromPath(path)
-        val legacy = fullIdFromPath(path)
-        when {
-            short != null || legacy != null -> {
-                val idOrShort = short ?: legacy!!
-                scope.launch {
-                    val doc = runCatching { api.getDocument(idOrShort) }.getOrNull()
-                    selected = doc?.id
-                    if (doc != null && replaceUrl) {
-                        // normalize legacy forms to the /doc/{hex} path
-                        BrowserHistory.replaceState(null, "", docPath(doc.id))
-                    }
-                }
+        if (short != null) {
+            scope.launch {
+                val doc = runCatching { api.getDocument(short) }.getOrNull()
+                selected = doc?.id
             }
-
-            else -> {
-                selected = null
-                if (replaceUrl && path != "/" && path.isNotEmpty()) {
-                    BrowserHistory.replaceState(null, "", "/")
-                }
+        } else {
+            selected = null
+            if (replaceUrl && path != "/") {
+                BrowserHistory.replaceState(null, "", "/")
             }
         }
     }
 
     useEffectOnce {
         refresh()
-        // initial URL: path first, then the legacy ?doc= deep link
-        val path = Location.pathname
-        val queryDoc = docIdFromQuery()
-        if (path != "/") {
-            handleUrlPath(path, replaceUrl = true)
-        } else if (queryDoc != null) {
-            handleUrlPath("/$queryDoc", replaceUrl = true)
-        }
+        handleUrlPath(Location.pathname, replaceUrl = true)
         // keep the app in sync with browser back/forward navigation
         listenForPopState { newPath -> handleUrlPath(newPath, replaceUrl = false) }
     }
