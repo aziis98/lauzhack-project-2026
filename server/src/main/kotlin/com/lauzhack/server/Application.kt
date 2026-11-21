@@ -64,6 +64,7 @@ fun Application.module() {
         hints = hints,
         scope = this,
         json = jsonConfig,
+        exercise = { id -> getDocument(id)?.exercise.orEmpty() },
     )
     agent.start(ocr.events)
 

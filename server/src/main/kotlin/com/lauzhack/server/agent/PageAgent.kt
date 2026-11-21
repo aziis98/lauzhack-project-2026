@@ -105,9 +105,13 @@ class KoogPageAgent(
             - The first message (or the first after a restart) is a full PAGE snapshot; every
               message after it is a delta. Both are JSON:
 
-              page    -> { "type": "page",    "chunks": [ CHUNK, ... ] }
+              page    -> { "type": "page",    "chunks": [ CHUNK, ... ], "exercise": "..." }
               changes -> { "type": "changes", "added": [ CHUNK, ... ], "modified": [ CHUNK, ... ],
                                                     "removed": [ "chunk-7", ... ] }
+
+              "exercise", when present, is the statement of the problem the student is
+              solving, set by the teacher. Use it to understand what the work is aiming
+              at; it may be empty.
 
               CHUNK = { "id": "chunk-3", "bounds": { "minX", "minY", "maxX", "maxY" },
                         "kind": "MATH" | "TEXT" | "HINT_REQUEST" | "DRAWING" | "UNREADABLE",

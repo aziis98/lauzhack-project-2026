@@ -48,6 +48,7 @@ class AgentService(
     private val hints: HintService,
     private val scope: CoroutineScope,
     private val json: Json,
+    private val exercise: suspend (documentId: String) -> String = { "" },
     private val settleTimeoutMillis: Long = 6000,
     private val settlePollMillis: Long = 300,
 ) {
@@ -135,7 +136,9 @@ class AgentService(
                 if (self?.isCancelled == true) return
                 if (!s.bootstrapped) {
                     if (page.isEmpty()) return
-                    userMessage = json.encodeToString(PageSnapshot(chunks = page.map { it.toPageChunk() }))
+                    userMessage = json.encodeToString(
+                        PageSnapshot(chunks = page.map { it.toPageChunk() }, exercise = exercise(documentId))
+                    )
                     bootstrap = true
                     // The snapshot covers everything buffered so far; changes that arrive
                     // DURING the model call must be buffered as deltas, not folded into it.

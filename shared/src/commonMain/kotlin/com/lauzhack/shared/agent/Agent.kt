@@ -21,6 +21,8 @@ data class PageChunk(
 data class PageSnapshot(
     val type: String = "page",
     val chunks: List<PageChunk>,
+    /** The problem the student is solving, if the document has one. */
+    val exercise: String = "",
 )
 
 /** One delta turn: what changed on the page since the previous message. */
