@@ -12,10 +12,12 @@ A cross-platform drawing app backend + web frontend, built with Kotlin.
   thin adapter layer
 
 The UI is chrome-free: the canvas fills the whole page, with only a floating
-back button and a minimal floating tool pill on top. tldraw's own UI
-(minimap, zoom controls, menus, default toolbar, pages) is hidden; colors
-and fills come from the contextual style panel, and keyboard shortcuts (V,
-D, E, R, A, T) mirror the pill. Autosave runs silently in the background.
+back button and a minimal floating tool pill on top. All of tldraw's own
+UI is hidden: minimap, zoom controls, menus, default toolbar, pages, the
+right-side style panel, and selection quick actions. Keyboard shortcuts (V,
+D, E, R, A, T) mirror the pill. Note: with the style panel hidden there is
+no color picker yet — shapes use the current default style. Autosave runs
+silently in the background.
 
 The canvas behaves like a **vertical scrolling document**: the camera is
 constrained to a tall page (960×4800) with `contain` behavior — the mouse

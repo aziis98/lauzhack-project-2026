@@ -33,6 +33,10 @@ private fun hiddenComponents(): dynamic {
     c.HelpMenu = null
     c.Toolbar = null
     c.PageMenu = null
+    c.StylePanel = null      // right-side color/style panel
+    c.QuickActions = null    // left-side bar when a shape is selected
+    c.HelperButtons = null   // "back to content" button
+    c.ActionsMenu = null
     return c
 }
 
