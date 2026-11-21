@@ -1,5 +1,6 @@
 package com.lauzhack.server.agent
 
+import com.lauzhack.server.db.AgentStateDao
 import com.lauzhack.server.hint.HintService
 import com.lauzhack.server.ocr.OcrService
 import com.lauzhack.server.ocr.TranscriptionEvent
@@ -23,6 +24,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
@@ -65,6 +67,8 @@ class AgentService(
         val pendingModified = LinkedHashMap<String, PageChunk>()
         val pendingRemoved = LinkedHashSet<String>()
         var lastOutput: AgentOutput = AgentOutput()
+        /** Whether the persisted conversation (if any) has been loaded. */
+        var restored = false
     }
 
     private val docs = ConcurrentHashMap<String, DocState>()
@@ -78,12 +82,18 @@ class AgentService(
         docs[documentId]?.let { s -> s.mutex.withLock { s.lastOutput } } ?: AgentOutput()
 
     /** The conversation so far (debug/inspection). */
-    suspend fun conversation(documentId: String): List<ConversationMessage> =
-        docs[documentId]?.let { s -> s.mutex.withLock { s.history.toList() } } ?: emptyList()
+    suspend fun conversation(documentId: String): List<ConversationMessage> {
+        val s = docs.computeIfAbsent(documentId) { DocState() }
+        return s.mutex.withLock {
+            ensureRestoredLocked(documentId, s)
+            s.history.toList()
+        }
+    }
 
     private suspend fun handle(event: TranscriptionEvent) {
         val s = docs.computeIfAbsent(event.documentId) { DocState() }
         s.mutex.withLock {
+            ensureRestoredLocked(event.documentId, s)
             when (event) {
                 is TranscriptionEvent.Removed -> {
                     s.pendingAdded.remove(event.chunkId)
@@ -163,8 +173,9 @@ class AgentService(
 
             val output = agent.converse(history, userMessage!!)
 
-            // success: commit the turn and consume exactly what was sent — entries that
-            // changed AGAIN during the model call stay buffered for the next delta
+            // success: commit the turn, consume exactly what was sent, and persist
+            // the conversation (entries that changed AGAIN during the model call
+            // stay buffered for the next delta)
             s.mutex.withLock {
                 for (c in sentAdded) if (s.pendingAdded[c.id] == c) s.pendingAdded.remove(c.id)
                 for (c in sentModified) if (s.pendingModified[c.id] == c) s.pendingModified.remove(c.id)
@@ -174,6 +185,7 @@ class AgentService(
                 trim(s.history)
                 s.lastOutput = output
                 committed = true
+                persist(documentId, s)
             }
             apply(documentId, page, output)
             log.info("doc {}: {} action(s)", documentId, output.actions.size)
@@ -282,14 +294,46 @@ class AgentService(
     }
 
     // ---------------------------------------------------------------
+    // Persistence: the conversation is saved per document, so the model's
+    // memory (hints, mistakes, functions) survives server restarts; every
+    // document keeps its own conversation.
+    // ---------------------------------------------------------------
+
+    /**
+     * Loads the stored conversation once per document per server session. The
+     * restored history is the model's memory; the page then flows back in as a
+     * fresh page snapshot (bootstrapped stays false), so plots and hints are
+     * re-emitted against current chunk ids — never stale ones.
+     * Callers must hold [DocState.mutex].
+     */
+    private fun ensureRestoredLocked(documentId: String, s: DocState) {
+        if (s.restored) return
+        s.restored = true
+        val stored = runCatching { AgentStateDao.load(documentId) }.getOrNull()
+        if (stored.isNullOrEmpty()) return
+        s.history.clear()
+        s.history.addAll(stored)
+        log.info("doc {}: restored conversation ({} messages)", documentId, stored.size)
+    }
+
+    /** Saves the conversation; a failed save never breaks the agent loop. */
+    private fun persist(documentId: String, s: DocState) {
+        runCatching { AgentStateDao.save(documentId, s.history.toList()) }
+            .onFailure { log.warn("doc {}: could not persist conversation: {}", documentId, it.message) }
+    }
+
+    // ---------------------------------------------------------------
     // Plots: the active set per document (add/replace by id, remove-aware)
     // ---------------------------------------------------------------
 
     private val plotRegistry = java.util.concurrent.ConcurrentHashMap<String, LinkedHashMap<String, PlotWithAnchor>>()
 
     /** The plots currently active for the document, in answer order. */
-    fun plots(documentId: String): List<PlotWithAnchor> =
-        synchronized(plotRegistry) { plotRegistry[documentId]?.values?.toList() ?: emptyList() }
+    fun plots(documentId: String): List<PlotWithAnchor> {
+        val s = docs.computeIfAbsent(documentId) { DocState() }
+        runBlocking { s.mutex.withLock { ensureRestoredLocked(documentId, s) } }
+        return synchronized(plotRegistry) { plotRegistry[documentId]?.values?.toList() ?: emptyList() }
+    }
 
     private fun putPlot(documentId: String, entry: PlotWithAnchor) =
         synchronized(plotRegistry) {
