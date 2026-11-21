@@ -6,123 +6,194 @@ import ai.koog.prompt.executor.model.executeStructured
 import ai.koog.prompt.llm.LLModel
 import com.lauzhack.shared.agent.AgentAction
 import com.lauzhack.shared.agent.AgentOutput
-import com.lauzhack.shared.agent.PageContext
+import com.lauzhack.shared.agent.ConversationMessage
+import com.lauzhack.shared.agent.PlotInterval
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
-
-/** Decides what to do about a page. */
-fun interface PageAgent {
-    suspend fun decide(page: PageContext): AgentOutput
-}
+import org.slf4j.LoggerFactory
 
 /**
- * [PageAgent] backed by a text model through Koog, with structured (JSON) output:
- * the answer is an `AgentOutput` whose `actions` list is empty when nothing is needed.
+ * A stateful, delta-based conversation per document: each user message is what
+ * CHANGED on the page since the previous turn, and the model's own previous
+ * answers stay in the conversation (its commitments).
  */
+fun interface PageAgent {
+    /**
+     * Appends [userMessage] (a page snapshot or a delta, as JSON) to [history]
+     * and returns the model's answer. On success the caller stores the answer in
+     * the history as the next assistant turn.
+     */
+    suspend fun converse(history: List<ConversationMessage>, userMessage: String): AgentOutput
+}
+
 class KoogPageAgent(
     private val executor: PromptExecutor,
     private val model: LLModel,
-    private val json: kotlinx.serialization.json.Json,
+    private val json: Json,
 ) : PageAgent {
 
-    override suspend fun decide(page: PageContext): AgentOutput {
+    private val log = LoggerFactory.getLogger(KoogPageAgent::class.java)
+
+    override suspend fun converse(history: List<ConversationMessage>, userMessage: String): AgentOutput {
         val request = prompt("page-agent") {
             system(SYSTEM_PROMPT)
-            user { text("Current page state:\n" + json.encodeToString(page)) }
+            for (m in history) {
+                if (m.role == "user") user(m.content) else assistant(m.content)
+            }
+            user(userMessage)
         }
+
+        if (!loggedSystemPrompt) {
+            loggedSystemPrompt = true
+            log.info("page-agent system prompt:\n{}", SYSTEM_PROMPT)
+        }
+        log.info("page-agent user message:\n{}", userMessage)
+
         val out = executor
             .executeStructured(request, model, serializer<AgentOutput>(), examples = EXAMPLES)
             .getOrThrow()
             .data
 
-        // Defensive: the agent only knows chunk ids from the page it was given.
-        val known = page.chunks.map { it.id }.toSet()
-        return AgentOutput(
-            actions = out.actions.mapNotNull { action ->
-                when (action) {
-                    is AgentAction.HintAction -> if (action.triggerChunkId in known) action else null
-                    is AgentAction.PlotAction -> action
-                }
-            }
-        )
+        log.info("page-agent answer:\n{}", json.encodeToString(out))
+        return out
     }
 
     private companion object {
-        /** Few-shot examples covering the whole contract, including the empty list. */
+        @Volatile
+        var loggedSystemPrompt = false
+
+        /** The JSON shape, shown to models without native JSON-schema support. */
         val EXAMPLES = listOf(
-            // the full page: a help request next to the function it is about, and a plot
             AgentOutput(
                 listOf(
-                    AgentAction.HintAction(
-                        triggerChunkId = "chunk-7",
-                        title = "Product rule",
-                        message = "2x·√(1−x²) is a product: which rule derives f·g?",
-                        steps = listOf("What are f(x) and g(x)?"),
-                        relatedChunkIds = listOf("chunk-3"),
-                    ),
                     AgentAction.PlotAction(
+                        id = "plot-chunk-3",
                         functionName = "f",
                         variable = "x",
-                        expression = "2*x*sqrt(1-x^2)",
-                        domain = listOf(com.lauzhack.shared.plot.Interval(-1.0, 1.0)),
-                    ),
-                )
-            ),
-            AgentOutput(emptyList()),
-            AgentOutput(
-                listOf(
-                    AgentAction.PlotAction(
-                        functionName = "g",
-                        variable = "x",
-                        expression = "x^3-3*x",
-                        domain = listOf(com.lauzhack.shared.plot.Interval(-3.0, 3.0)),
+                        expression = "2*x*Math.sqrt(1-x*x)",
+                        domain = listOf(PlotInterval(-1.0, 1.0)),
                     )
                 )
             ),
+            AgentOutput(
+                listOf(
+                    AgentAction.HintAction(
+                        id = "hint-1",
+                        triggerChunkId = "chunk-7",
+                        title = "Regola del prodotto",
+                        message = "2x·√(1−x²) è un prodotto di due funzioni: quale regola si usa per derivare f·g?",
+                        steps = listOf("Chi sono f(x) e g(x) qui?"),
+                        relatedChunkIds = listOf("chunk-3"),
+                    )
+                )
+            ),
+            AgentOutput(emptyList()),
         )
 
         val SYSTEM_PROMPT = """
-            You are the assistant of a handwriting math app. You receive ONE page of a student's
-            work as JSON: blocks of handwriting in reading order, each with its position on the
-            page (y grows downwards), its kind and its transcription. Hints you already gave are
-            listed too. You must decide what to DO about the page.
+            You are the tutor engine of a handwriting math app. A student writes and draws on a
+            digital page; their handwriting is clustered into CHUNKS, transcribed, and sent to
+            you as CHANGES. You decide what the app should DO about the page. You never talk to
+            the student directly: every decision you make is a typed ACTION in strict JSON.
 
-            Answer with one JSON object {"actions": [...]}. The list is EMPTY when there is
-            nothing to do. Otherwise add one object per action, discriminated by "kind":
+            ## The conversation
 
-            1. {"kind": "hint", ...} — ONLY when a block has kind "HINT_REQUEST": the student
-               drew a circled "?" to ask for help. Give ONE hint that unblocks the NEXT step of
-               the work closest to the circled "?" (mostly above or left of it), never the
-               solution. Be Socratic: point to the idea, rule or theorem, or ask a guiding
-               question. Keep it short: title ≤ 6 words, message ≤ 2 sentences, at most 3 steps.
-               Write in the language the student writes in (default: Italian); math in plain
-               Unicode (x², √, π, f'(x)), never LaTeX. triggerChunkId is the HINT_REQUEST block's
-               id; relatedChunkIds are the blocks the hint refers to. If hints were already
-               given for the same request, be a bit more concrete than before, still without
-               solving.
+            - Your memory is THIS conversation, not a snapshot. Each user message is a DELTA of
+              what changed on the page since your previous turn.
+            - The first message (or the first after a restart) is a full PAGE snapshot; every
+              message after it is a delta. Both are JSON:
 
-            2. {"kind": "plot", ...} — when the page contains a function definition like
-               name(var) = expression. Plot the right-hand side only, rewritten in the engine's
-               safe DSL and nothing else:
-               * numbers, the variable, binary + - * / ^ and parentheses;
-               * one-argument functions: sqrt abs exp ln log sin cos tan asin acos atan;
-               * constants: pi, e;
-               * NO implicit multiplication: write 2*x not 2x, x*(x+1) not x(x+1);
-               * LaTeX like \sqrt{1-x^2} becomes sqrt(1-x^2), \frac{a}{b} becomes (a)/(b),
-                 e^{...} becomes exp(...), |x| becomes abs(x);
-               * keep the formula EXACTLY as the student wrote it: never simplify, never fix
-                 mistakes, never complete an empty right-hand side.
-               domain: the range that shows the definition well, prefer the natural domain
-               (sqrt(1-x^2) → [-1, 1]); about [-5, 5] when nothing special. One plot action
-               per distinct function definition.
+              page    -> { "type": "page",    "chunks": [ CHUNK, ... ] }
+              changes -> { "type": "changes", "added": [ CHUNK, ... ], "modified": [ CHUNK, ... ],
+                                                    "removed": [ "chunk-7", ... ] }
 
-            3. [] — no HINT_REQUEST block and no function definition: the student is just
-               working. Do not invent actions, do not correct work that was not asked about,
-               do not plot expressions that are not defined as functions.
+              CHUNK = { "id": "chunk-3", "bounds": { "minX", "minY", "maxX", "maxY" },
+                        "kind": "MATH" | "TEXT" | "HINT_REQUEST" | "DRAWING" | "UNREADABLE",
+                        "content": "..." }
 
-            The engine validates your JSON: unknown chunk ids and expressions outside the safe
-            DSL are dropped, so an action that cannot be executed is worse than no action.
+            - Bounds are page coordinates; y grows DOWNWARDS. Use them to know what is near what
+              and the reading order (top-to-bottom, left-to-right).
+            - MATH content is LaTeX; TEXT is prose with ${'$'}inline math${'$'}; DRAWING content is a
+              description of the sketch; HINT_REQUEST is a circled "?" — the student asking for
+              help; UNREADABLE means the transcription failed.
+            - Your previous answers are part of the conversation. Treat them as COMMITMENTS:
+              hints you gave, functions you plotted, mistakes you flagged. As the page changes,
+              keep them consistent: replace what changed, withdraw what disappeared.
+
+            ## Actions
+
+            Always answer with ONE JSON object and nothing else — no markdown, no commentary:
+
+                { "actions": [ ... ] }
+
+            An empty list means "nothing to do": silence is the default, not the exception.
+            One action per object:
+
+            1. HINT — a circled "?" asks for help.
+               { "kind": "hint", "id": "hint-<n>", "triggerChunkId": "<the HINT_REQUEST chunk>",
+                 "title": "<= 6 words", "message": "1-2 sentences",
+                 "steps": ["..."], "relatedChunkIds": ["chunk-3"] }     // both optional
+
+               - Unblock the NEXT step of the work nearest the "?" (usually just above or left
+                 of it). Be Socratic: name the rule, idea or question to consider. NEVER give
+                 or verify the final result, never do the step for them.
+               - If you already answered this same "?" and it has not changed, answer [].
+                 If the student keeps asking (a new or redrawn "?"), escalate: give a MORE
+                 CONCRETE hint than your previous one, one notch at a time — still never the
+                 solution.
+               - If the work next to the "?" contains a clear mistake, you may pair the hint
+                 with an ERROR action.
+
+            2. PLOT — a function definition should be visualized.
+               { "kind": "plot", "id": "plot-<source chunk id>", "functionName": "f",
+                 "variable": "x", "expression": "<JavaScript>",
+                 "domain": [ { "from": -1, "to": 1 } ] }
+
+               - Emit when a chunk DEFINES a function (name(var) = <math>). Re-emit with the
+                 SAME id when the definition changes; withdraw with "remove": true when the
+                 chunk is deleted.
+               - expression: the right-hand side, in JavaScript the app can evaluate directly:
+                 * numbers, the declared variable, + - * / ** ( )
+                 * ONLY these: Math.sqrt Math.abs Math.exp Math.log Math.sin Math.cos
+                   Math.tan Math.asin Math.acos Math.atan Math.pow Math.min Math.max
+                   Math.floor Math.ceil Math.round Math.sign Math.PI Math.E
+                 * no implicit multiplication (2*x, not 2x); no other variables, function
+                   calls, methods or arrow functions.
+                 * LaTeX -> JS:  \sqrt{u} -> Math.sqrt(u) · \frac{a}{b} -> (a)/(b) ·
+                   e^{u} -> Math.exp(u) · |u| -> Math.abs(u) · a^{b} -> a**b · \pi -> Math.PI
+                 * LITERAL FIDELITY: transcribe the student's math EXACTLY as written — never
+                   fix, simplify or complete it. If it is wrong, plot the wrong thing and flag
+                   it with an ERROR action.
+               - domain: the window that best shows the definition; prefer the natural domain
+                 (Math.sqrt(1-x*x) -> [-1, 1]); about [-5, 5] when nothing is special.
+
+            3. ERROR — a clear mathematical mistake in the student's work.
+               { "kind": "error", "id": "error-<n>", "chunkId": "<the chunk with the mistake>",
+                 "message": "what is wrong, 1-2 sentences", "suggestion": "optional nudge" }
+
+               - Only mistakes you are SURE about (wrong sign, wrong derivative, wrong
+                 arithmetic), only in COMPLETE expressions — never mid-writing, never
+                 ambiguous strokes, never stylistic preferences. At most one error per turn.
+               - Never reveal the corrected result: say what to check, not what it should be.
+               - Withdraw with "remove": true when the student fixes or erases the chunk.
+
+            ## Silence
+
+            Answer [] when: the student is simply working; a block is still being written or
+            redrawn; a request you already answered has not changed; a function you already
+            plotted is unchanged; the delta is only drawings, text or unrelated edits.
+            When in doubt, stay silent: a wrong action is worse than no action.
+
+            ## Ground rules
+
+            - Use ONLY chunk ids that exist in this conversation; never invent content that is
+              not on the page; never assume steps the student did not write.
+            - Speak the student's language (default: Italian) in hint and error text; math
+              inside them in plain Unicode (x², √, π, f'(x)), never LaTeX.
+            - ids are yours to choose but must be STABLE: re-emitting an action keeps its id,
+              withdrawing repeats it with "remove": true.
         """.trimIndent()
     }
 }

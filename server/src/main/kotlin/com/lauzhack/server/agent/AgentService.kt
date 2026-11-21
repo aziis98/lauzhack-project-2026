@@ -3,15 +3,13 @@ package com.lauzhack.server.agent
 import com.lauzhack.server.hint.HintService
 import com.lauzhack.server.ocr.OcrService
 import com.lauzhack.server.ocr.TranscriptionEvent
-import com.lauzhack.server.plot.PlotRegistry
-import com.lauzhack.server.plot.buildPlotSpec
 import com.lauzhack.shared.agent.AgentAction
 import com.lauzhack.shared.agent.AgentOutput
+import com.lauzhack.shared.agent.ConversationMessage
 import com.lauzhack.shared.agent.PageChunk
-import com.lauzhack.shared.agent.PageContext
+import com.lauzhack.shared.agent.PageDelta
+import com.lauzhack.shared.agent.PageSnapshot
 import com.lauzhack.shared.hint.HintCard
-import com.lauzhack.shared.hint.HintStatus
-import com.lauzhack.shared.ocr.TranscribedChunk
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -24,30 +22,32 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * The page agent: watches the OCR stage and, once the page has settled, asks the
- * model ONCE per changed page state what to do about it. The answer is an
- * [AgentOutput] — an empty list when no action is needed — and each action is
- * executed deterministically:
+ * The page agent, conversation-based: per document it keeps a running conversation
+ * with the model. The first message is a full page snapshot (bootstrap), every later
+ * message is the DELTA of what changed since the previous turn — and the model's
+ * own previous answers stay in the conversation as its commitments, so no state is
+ * re-sent.
  *
- * - [AgentAction.HintAction] → adopted into [HintService] (card, anchor, dismissal);
- * - [AgentAction.PlotAction] → validated with the safe DSL → [PlotRegistry].
+ * Changes are buffered while the page settles (OCR pending) and flushed as ONE user
+ * message; a failed call leaves the buffer intact so the next change retries it.
  *
- * Cost control: the context hash (all chunk content hashes) is compared to the
- * last evaluated state, so an unchanged page is never sent to the model twice.
+ * Hints are adopted into [HintService] (card, anchor, dismissal); plots and errors
+ * are served as-is for the client to render.
  *
- * @param agent null disables everything (no API key): no hints, no plots.
+ * @param agent null disables everything (no API key).
  */
 class AgentService(
     private val agent: PageAgent?,
     private val ocr: OcrService,
     private val hints: HintService,
-    private val plots: PlotRegistry,
     private val scope: CoroutineScope,
+    private val json: Json,
     private val settleTimeoutMillis: Long = 6000,
     private val settlePollMillis: Long = 300,
 ) {
@@ -56,7 +56,12 @@ class AgentService(
     private class DocState {
         val mutex = Mutex()
         var job: Job? = null
-        var lastContextHash: String? = null
+        var bootstrapped = false
+        val knownChunks = HashSet<String>()
+        val history = ArrayList<ConversationMessage>()
+        val pendingAdded = LinkedHashMap<String, PageChunk>()
+        val pendingModified = LinkedHashMap<String, PageChunk>()
+        val pendingRemoved = LinkedHashSet<String>()
         var lastOutput: AgentOutput = AgentOutput()
     }
 
@@ -70,9 +75,42 @@ class AgentService(
     suspend fun snapshot(documentId: String): AgentOutput =
         docs[documentId]?.let { s -> s.mutex.withLock { s.lastOutput } } ?: AgentOutput()
 
+    /** The conversation so far (debug/inspection). */
+    suspend fun conversation(documentId: String): List<ConversationMessage> =
+        docs[documentId]?.let { s -> s.mutex.withLock { s.history.toList() } } ?: emptyList()
+
     private suspend fun handle(event: TranscriptionEvent) {
         val s = docs.computeIfAbsent(event.documentId) { DocState() }
         s.mutex.withLock {
+            when (event) {
+                is TranscriptionEvent.Removed -> {
+                    s.pendingAdded.remove(event.chunkId)
+                    s.pendingModified.remove(event.chunkId)
+                    if (s.bootstrapped) s.pendingRemoved += event.chunkId
+                }
+
+                is TranscriptionEvent.Updated -> {
+                    // OCR still pending: not part of a delta until it is transcribed
+                    val transcription = event.chunk.transcription ?: return@withLock
+                    val chunk = event.chunk.chunk
+                    val pc = PageChunk(
+                        id = chunk.id,
+                        minX = chunk.bounds.minX,
+                        minY = chunk.bounds.minY,
+                        maxX = chunk.bounds.maxX,
+                        maxY = chunk.bounds.maxY,
+                        kind = transcription.kind.name,
+                        content = transcription.content,
+                    )
+                    s.pendingRemoved.remove(chunk.id)
+                    if (!s.bootstrapped || s.knownChunks.add(chunk.id)) {
+                        s.pendingAdded[chunk.id] = pc
+                    } else {
+                        s.pendingAdded.remove(chunk.id)
+                        s.pendingModified[chunk.id] = pc
+                    }
+                }
+            }
             if (agent == null) return
             s.job?.cancel()
             s.job = scope.launch { evaluate(event.documentId, s, agent) }
@@ -81,36 +119,62 @@ class AgentService(
 
     private suspend fun evaluate(documentId: String, s: DocState, agent: PageAgent) {
         val self = currentCoroutineContext()[Job]
+        var bootstrap = false
         try {
             val page = settledPage(documentId)
 
-            // one call per changed page state, never for the same content twice
-            val contextHash = hashOf(page)
+            // build the user message from the buffer WITHOUT consuming it: on failure the
+            // buffered changes retry with the next delta instead of being lost
+            var userMessage: String? = null
+            var history: List<ConversationMessage> = emptyList()
             s.mutex.withLock {
-                if (contextHash == s.lastContextHash) return
                 if (self?.isCancelled == true) return
+                if (!s.bootstrapped) {
+                    if (page.isEmpty()) return
+                    userMessage = json.encodeToString(PageSnapshot(chunks = page.map { it.toPageChunk() }))
+                    bootstrap = true
+                    // The snapshot covers everything buffered so far; changes that arrive
+                    // DURING the model call must be buffered as deltas, not folded into it.
+                    s.bootstrapped = true
+                    s.knownChunks.clear()
+                    page.forEach { s.knownChunks += it.chunk.id }
+                    s.pendingAdded.clear()
+                    s.pendingModified.clear()
+                    s.pendingRemoved.clear()
+                } else if (s.pendingAdded.isEmpty() && s.pendingModified.isEmpty() && s.pendingRemoved.isEmpty()) {
+                    return // nothing new since the last turn
+                } else {
+                    val delta = PageDelta(
+                        added = s.pendingAdded.values.toList(),
+                        modified = s.pendingModified.values.toList(),
+                        removed = s.pendingRemoved.toList(),
+                    )
+                    userMessage = json.encodeToString(delta)
+                }
+                history = s.history.toList()
             }
 
-            val given = hints.hints(documentId)
-                .filter { it.status == HintStatus.READY }
-                .mapNotNull { it.card }
-                .map { com.lauzhack.shared.agent.GivenHint(it.title, it.message) }
-            val context = PageContext(
-                documentId = documentId,
-                chunks = page.map { it.toPageChunk() },
-                givenHints = given,
-            )
+            val output = agent.converse(history, userMessage!!)
 
-            val output = agent.decide(context)
-            apply(documentId, page, output)
+            // success: commit the turn (the buffer already holds only post-message changes)
             s.mutex.withLock {
-                s.lastContextHash = contextHash
+                s.history.add(ConversationMessage("user", userMessage))
+                s.history.add(ConversationMessage("assistant", json.encodeToString(output)))
+                trim(s.history)
                 s.lastOutput = output
             }
-            log.info("doc {}: {} action(s) [{}]", documentId, output.actions.size, contextHash.take(8))
+            apply(documentId, page, output)
+            log.info("doc {}: {} action(s)", documentId, output.actions.size)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (bootstrap) {
+                // the bootstrap turn never happened: undo it so the next evaluation retries
+                s.mutex.withLock {
+                    s.bootstrapped = false
+                    s.knownChunks.clear()
+                }
+            }
             log.warn("agent failed for doc {}: {}", documentId, e.message)
         } finally {
             withContext(NonCancellable) {
@@ -119,54 +183,47 @@ class AgentService(
         }
     }
 
-    /** Execute each action deterministically; anything invalid is dropped, never guessed. */
-    private suspend fun apply(documentId: String, page: List<TranscribedChunk>, output: AgentOutput) {
+    /** Keep the bootstrap plus the most recent turns; drop the middle if it grows too long. */
+    private fun trim(history: MutableList<ConversationMessage>) {
+        if (history.size > 40) {
+            val tail = history.drop(history.size - 36)
+            val kept = ArrayList<ConversationMessage>(37)
+            kept.add(history.first()) // the bootstrap page
+            kept.addAll(tail)
+            history.clear()
+            history.addAll(kept)
+        }
+    }
+
+    /** Execute what the server owns: hints. Plots and errors are served to the client. */
+    private suspend fun apply(documentId: String, page: List<com.lauzhack.shared.ocr.TranscribedChunk>, output: AgentOutput) {
         val byId = page.associateBy { it.chunk.id }
-
-        val specs = ArrayList<com.lauzhack.shared.plot.PlotSpec>()
         for (action in output.actions) {
-            when (action) {
-                is AgentAction.HintAction -> {
-                    val trigger = byId[action.triggerChunkId] ?: continue
-                    val hintId = hints.request(
-                        documentId = documentId,
-                        triggerChunkId = action.triggerChunkId,
-                        contentHash = trigger.chunk.contentHash,
-                        anchor = trigger.chunk.bounds,
-                    ) ?: continue // already answered or dismissed for this exact circled "?"
-                    hints.complete(
-                        documentId = documentId,
-                        hintId = hintId,
-                        card = HintCard(
-                            title = action.title.trim(),
-                            message = action.message.trim(),
-                            steps = action.steps.map { it.trim() }.filter { it.isNotEmpty() },
-                            relatedChunkIds = action.relatedChunkIds,
-                        ),
-                    )
-                    log.info("doc {}: hint {} for {}", documentId, hintId, action.triggerChunkId)
-                }
-
-                is AgentAction.PlotAction -> {
-                    try {
-                        specs += buildPlotSpec(
-                            documentId = documentId,
-                            functionName = action.functionName,
-                            variable = action.variable,
-                            expression = action.expression,
-                            domain = action.domain,
-                        )
-                    } catch (e: Exception) {
-                        log.warn("doc {}: plot action dropped (bad DSL: \"{}\")", documentId, action.expression)
-                    }
-                }
+            if (action is AgentAction.HintAction) {
+                val trigger = byId[action.triggerChunkId] ?: continue
+                val hintId = hints.request(
+                    documentId = documentId,
+                    triggerChunkId = action.triggerChunkId,
+                    contentHash = trigger.chunk.contentHash,
+                    anchor = trigger.chunk.bounds,
+                ) ?: continue // already answered or dismissed for this exact circled "?"
+                hints.complete(
+                    documentId = documentId,
+                    hintId = hintId,
+                    card = HintCard(
+                        title = action.title.trim(),
+                        message = action.message.trim(),
+                        steps = action.steps.map { it.trim() }.filter { it.isNotEmpty() },
+                        relatedChunkIds = action.relatedChunkIds,
+                    ),
+                )
+                log.info("doc {}: hint {} for {}", documentId, hintId, action.triggerChunkId)
             }
         }
-        plots.replaceAll(documentId, specs)
     }
 
     /** The page once every chunk is transcribed, or as it is after the timeout. */
-    private suspend fun settledPage(docId: String): List<TranscribedChunk> =
+    private suspend fun settledPage(docId: String): List<com.lauzhack.shared.ocr.TranscribedChunk> =
         withTimeoutOrNull(settleTimeoutMillis) {
             var page = ocr.snapshot(docId)
             while (page.any { it.transcription == null }) {
@@ -176,20 +233,13 @@ class AgentService(
             page
         } ?: ocr.snapshot(docId)
 
-    private fun hashOf(page: List<TranscribedChunk>): String {
-        val md = MessageDigest.getInstance("MD5")
-        page.sortedBy { it.chunk.id }
-            .forEach { md.update("${it.chunk.id}:${it.chunk.contentHash};".toByteArray()) }
-        return md.digest().joinToString("") { "%02x".format(it) }
-    }
-
-    private fun TranscribedChunk.toPageChunk() = PageChunk(
+    private fun com.lauzhack.shared.ocr.TranscribedChunk.toPageChunk() = PageChunk(
         id = chunk.id,
         minX = chunk.bounds.minX,
         minY = chunk.bounds.minY,
         maxX = chunk.bounds.maxX,
         maxY = chunk.bounds.maxY,
-        kind = transcription?.kind?.name ?: "PENDING",
+        kind = transcription?.kind?.name ?: "UNREADABLE",
         content = transcription?.content.orEmpty(),
     )
 

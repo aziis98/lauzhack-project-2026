@@ -1,22 +1,9 @@
 package com.lauzhack.shared.agent
 
-import com.lauzhack.shared.plot.Interval
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/**
- * The page as the agent sees it: the JSON synthesized from the chunk and canvas
- * information, sent to the model in the user message.
- */
-@Serializable
-data class PageContext(
-    val documentId: String,
-    val chunks: List<PageChunk>,
-    /** Hints already given on this page, oldest first (so the next can be more concrete). */
-    val givenHints: List<GivenHint> = emptyList(),
-)
-
-/** One transcribed block of the page, in reading order. */
+/** One transcribed block of the page. */
 @Serializable
 data class PageChunk(
     val id: String,
@@ -24,23 +11,35 @@ data class PageChunk(
     val minY: Double,
     val maxX: Double,
     val maxY: Double,
-    /** [com.lauzhack.shared.ocr.ChunkKind] name: MATH, TEXT, HINT_REQUEST, DRAWING, UNREADABLE. */
+    /** ChunkKind name: MATH, TEXT, HINT_REQUEST, DRAWING, UNREADABLE. */
     val kind: String,
     val content: String,
 )
 
+/** The bootstrap message: the whole page, when the conversation starts (or restarts). */
 @Serializable
-data class GivenHint(val title: String, val message: String)
+data class PageSnapshot(
+    val type: String = "page",
+    val chunks: List<PageChunk>,
+)
+
+/** One delta turn: what changed on the page since the previous message. */
+@Serializable
+data class PageDelta(
+    val type: String = "changes",
+    val added: List<PageChunk> = emptyList(),
+    val modified: List<PageChunk> = emptyList(),
+    val removed: List<String> = emptyList(),
+)
 
 /**
  * The agent's answer, always a JSON list of actions:
- * an **empty list means no action is needed** — plain work with no help request
- * and nothing to plot.
+ * an **empty list means no action is needed**.
  */
 @Serializable
 data class AgentOutput(val actions: List<AgentAction> = emptyList())
 
-/** One thing the agent decided to do about the page. Discriminated by `type`. */
+/** One thing the agent decided to do about the page. Discriminated by `kind`. */
 @Serializable
 sealed interface AgentAction {
 
@@ -48,7 +47,7 @@ sealed interface AgentAction {
     @Serializable
     @SerialName("hint")
     data class HintAction(
-        /** The chunk holding the circled "?" — the card anchors next to it. */
+        val id: String = "",
         val triggerChunkId: String,
         val title: String,
         val message: String,
@@ -56,27 +55,35 @@ sealed interface AgentAction {
         val relatedChunkIds: List<String> = emptyList(),
     ) : AgentAction
 
-    /** A function definition on the page should be plotted — the model computes the curve itself. */
+    /** A function definition on the page should be plotted (client-side, JS expression). */
     @Serializable
     @SerialName("plot")
     data class PlotAction(
+        val id: String = "",
         val functionName: String? = null,
         val variable: String = "x",
-        /** The definition as written on the page — shown as the plot caption, never evaluated. */
-        val expression: String = "",
-        val domain: List<Interval> = listOf(Interval(-5.0, 5.0)),
-        /** The curve, sampled by the model: `[x, y]` pairs ordered by x. */
-        val points: List<List<Double>> = emptyList(),
-        /** Interesting points the model found (roots, maxima, minima). */
-        val highlights: List<PlotHighlight> = emptyList(),
+        /** JavaScript the client can evaluate directly, e.g. `2*x*Math.sqrt(1-x*x)`. */
+        val expression: String,
+        val domain: List<PlotInterval> = listOf(PlotInterval(-5.0, 5.0)),
+        /** Withdraw a previously emitted plot with the same id. */
+        val remove: Boolean = false,
+    ) : AgentAction
+
+    /** A clear mathematical mistake in the student's work. */
+    @Serializable
+    @SerialName("error")
+    data class ErrorAction(
+        val id: String = "",
+        val chunkId: String,
+        val message: String,
+        val suggestion: String? = null,
+        val remove: Boolean = false,
     ) : AgentAction
 }
 
 @Serializable
-data class PlotHighlight(
-    val x: Double,
-    val y: Double? = null,
-    /** root | max | min | custom */
-    val kind: String = "custom",
-    val label: String? = null,
-)
+data class PlotInterval(val from: Double, val to: Double)
+
+/** One stored turn of the per-document conversation. */
+@kotlinx.serialization.Serializable
+data class ConversationMessage(val role: String, val content: String)

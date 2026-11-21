@@ -11,7 +11,6 @@ import com.lauzhack.server.hint.KoogHintAgent
 import com.lauzhack.server.ocr.KoogChunkRecognizer
 import com.lauzhack.server.ocr.OcrService
 import com.lauzhack.server.db.jsonConfig
-import com.lauzhack.server.plot.PlotRegistry
 import com.lauzhack.server.routes.agentRoutes
 import com.lauzhack.server.routes.apiRoutes
 import io.ktor.http.CacheControl
@@ -53,21 +52,18 @@ fun Application.module() {
     )
     ocr.start(ChunkService.events)
 
-    // The page agent owns hint generation now: HintService keeps its state, anchors,
-    // dismissal and web UI, and receives hints via request()/complete().
     val hints = HintService(
         generator = null,
         scope = this,
         pageTranscription = ocr::snapshot,
         exercise = { id -> getDocument(id)?.exercise.orEmpty() },
     )
-    val plots = PlotRegistry()
     val agent = AgentService(
         agent = ai.agentModel?.let { KoogPageAgent(ai.executor, it, jsonConfig) },
         ocr = ocr,
         hints = hints,
-        plots = plots,
         scope = this,
+        json = jsonConfig,
     )
     agent.start(ocr.events)
 
@@ -98,7 +94,7 @@ fun Application.module() {
 
     routing {
         apiRoutes(ocr, hints)
-        agentRoutes(agent, plots)
+        agentRoutes(agent)
         serveFrontendIfBuilt()
     }
 }
