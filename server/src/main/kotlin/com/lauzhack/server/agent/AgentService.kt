@@ -120,6 +120,7 @@ class AgentService(
     private suspend fun evaluate(documentId: String, s: DocState, agent: PageAgent) {
         val self = currentCoroutineContext()[Job]
         var bootstrap = false
+        var committed = false
         try {
             val page = settledPage(documentId)
 
@@ -168,24 +169,30 @@ class AgentService(
                 s.history.add(ConversationMessage("assistant", json.encodeToString(output)))
                 trim(s.history)
                 s.lastOutput = output
+                committed = true
             }
             apply(documentId, page, output)
             log.info("doc {}: {} action(s)", documentId, output.actions.size)
         } catch (e: CancellationException) {
+            // a newer change re-schedules the evaluation: if this was the bootstrap
+            // turn and it never committed, undo it so the next run re-snapshots
+            if (bootstrap && !committed) revertBootstrap(s)
             throw e
         } catch (e: Exception) {
-            if (bootstrap) {
-                // the bootstrap turn never happened: undo it so the next evaluation retries
-                s.mutex.withLock {
-                    s.bootstrapped = false
-                    s.knownChunks.clear()
-                }
-            }
+            if (bootstrap && !committed) revertBootstrap(s)
             log.warn("agent failed for doc {}: {}", documentId, e.message)
         } finally {
             withContext(NonCancellable) {
                 s.mutex.withLock { if (s.job === self) s.job = null }
             }
+        }
+    }
+
+    /** The bootstrap turn never happened: undo it so the next evaluation re-snapshots. */
+    private suspend fun revertBootstrap(s: DocState) {
+        s.mutex.withLock {
+            s.bootstrapped = false
+            s.knownChunks.clear()
         }
     }
 
