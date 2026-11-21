@@ -2,7 +2,7 @@
 
 ![Lauzhack Draw canvas](docs/hero.png)
 
-A Kotlin-based, cross-platform drawing workspace for students doing **exercise-based subjects** (with a first focus on **mathematics**, e.g. analyzing the graph of a function). Students work on an infinite whiteboard/canvas; when they need help, an **AI tutor** can step in interactively (hints, feedback, visual aids) directly inside the same workspace.
+A Kotlin-based, cross-platform drawing workspace for students doing **exercise-based subjects** (with a first focus on **mathematics**, e.g. analyzing the graph of a function). Students work on a **page-based canvas** (exercise pages) using a digital whiteboard-style workspace; when they need help, an **AI tutor** can step in interactively (hints, feedback, visual aids) directly inside the same workspace. *(Note: the current prototype UI is built on an infinite-canvas editor, but the intended end product is **page-based**.)*
 
 This repository currently contains the **canvas app + backend** (already implemented). The hackathon goal is to **add AI-assisted interaction** on top of this canvas for live demos.
 
@@ -14,6 +14,7 @@ This repository currently contains the **canvas app + backend** (already impleme
 - [Hackathon demo (concrete scenario)](#hackathon-demo-concrete-scenario)
 - [What exists today (current app)](#what-exists-today-current-app)
 - [Planned AI-assisted features](#planned-ai-assisted-features)
+- [AI pipeline: OCR + agentic interaction (design direction)](#ai-pipeline-ocr--agentic-interaction-design-direction)
 - [How the system works (architecture)](#how-the-system-works-architecture)
 - [Data model (shared, tool-agnostic)](#data-model-shared-tool-agnostic)
 - [REST API (backend)](#rest-api-backend)
@@ -74,16 +75,16 @@ The same interaction patterns apply to **other exercised-based subjects** such a
 
 The repo is a working **drawing app** (Lauzhack Draw) that serves as the base canvas:
 
-- **Infinite whiteboard UI** powered by **tldraw** (web), running as a Kotlin/JS + React app.
-- **Documents**: users can create/open drawings (documents) from a simple home list.
+- **Canvas UI (prototype)** powered by **tldraw** (web), running as a Kotlin/JS + React app. The **target product is page-based** (students work across defined pages/worksheets) rather than a free infinite board in the final experience.
+- **Documents**: users can create/open drawings/documents (each representing work/pages) from a simple home list.
 - **Persistent storage**: drawings are saved to a **Kotlin/JVM backend** (Ktor) using **SQLite** (via Exposed).
 - **Autosave**: the web client periodically batch-saves the current canvas state to the server (silent background sync).
 - **Tool-agnostic persistence**: the server stores a **generic element model** (see below); the web app is the only layer that knows tldraw details (conversion happens in the web adapter).
 
-### Canvas/editor behavior (current)
+### Canvas/editor behavior (current → target)
 
 - The canvas is effectively **chrome-free** in the main drawing view (floating back button). tldraw’s default UI panels are hidden in this build; interaction follows the app’s current configuration.
-- Drawings are treated as a **single page** in the current integration.
+- **Target:** a **page-based** workspace (explicit pages/worksheets per document/exercise flow), not an infinite whiteboard in the final product. The current prototype integration may behave like a single page today; page structure will be formalized as the product evolves.
 - Supported content today (via the shared model + tldraw mapping) includes shapes such as **strokes/drawings, basic geometries (rectangle/ellipse/triangle/diamond/cloud), text/note, arrows** (arrows are persisted in a simplified/free form in current MVP behavior). Unknown/future element kinds can be extended in the shared model.
 
 > This canvas is the “workspace” where students will do exercises and where the AI will add hints, highlights, plots, and annotations during the hackathon demo.
@@ -135,6 +136,65 @@ The hackathon demo centers on the items above, but the intended product behavior
 - give progressive hints,
 - annotate the canvas (drawings/text/markers/plots),
 - stay aligned with what the student wrote (context-aware reasoning).
+
+---
+
+## AI pipeline: OCR + agentic interaction (design direction)
+
+A collaborator is exploring an approach based on **OCR conversion + agentic interaction**. The goal is to turn what the student wrote/drew into **structured, machine-checkable objects** so the system can respond reliably (and often **deterministically**) instead of relying only on free-form model output.
+
+### High-level flow (intended)
+
+1. **Capture context from the page/canvas** (strokes, text regions, positions) for the relevant area (e.g. near a `?`, a selected region, or the current page).
+2. **OCR / recognition** converts handwritten/printed marks into candidates: symbols, expressions, function definitions, labels, etc.
+3. **Agentic layer** (LLM/agent) interprets intent and assembles **structured render/analysis objects** (see below) that the app can act on.
+4. **Deterministic execution/rendering**: for well-defined object types, the client (or a trusted service) runs deterministic code to produce visuals/feedback (e.g. plot a function, compute and mark critical points) and places results into the UI—ideally in a **floating window/panel on the canvas** (or an equivalent anchored overlay) so the student keeps context.
+5. The result is shown as **interactive guidance** (annotations, plots, highlights, hints) on the page-based workspace.
+
+This split keeps **math/plotting behavior predictable**: once the AI/agent has produced a validated structured object, rendering is not “left to the model” to draw pixels unpredictably—it is computed.
+
+### Structured data to design now (OCR → objects)
+
+We should start by defining a small set of **structured object types** that are:
+- **useful for the demo** (math graph-of-function first),
+- **not too complicated** to implement,
+- **explicit enough** that deterministic code can render them (e.g. into a floating window on the canvas).
+
+#### Example: `PlotSpec` (function plot) — suggested shape (illustrative)
+
+A plot should be represented as an object that contains everything needed to render it deterministically, for example:
+
+- **`kind: "plot"`**
+- **`expression`**: a normalized representation of the function, e.g. a string in a safe math DSL or a structured AST (team choice). Example intent: `f(x) = x^3 - 3x`.
+- **`variable`**: usually `x` (default).
+- **`domain`**: how the x-range is defined. A simple demo-friendly form is a **list of segments/intervals**, e.g. pieces like `{ "from": -5, "to": 5 }` (and later unions), so rendering and analysis can iterate over intervals.
+- **`samples` / rendering hints (optional)**: e.g. recommended sample count, or let the renderer choose defaults.
+- **`highlights`**: a list of annotated points/features to mark on the plot, for example:
+  - zeros / roots,
+  - critical points (from derivative analysis),
+  - local maxima/minima,
+  - user-requested points.
+  Each highlight can include: `x`, `y` (if known), `label` (e.g. `"local max"`), `kind` (`"root" | "critical" | "inflection" | "custom"`), and optional style notes.
+- **`display` (optional)**: suggested placement such as a **floating window** anchor (coordinates on the page), title, or size hint—so the UI can open a plot panel near the relevant work.
+
+**Deterministic behavior:** if OCR + agent (or rules) successfully produce a valid `PlotSpec`, the app runs deterministic plotting code (evaluate `expression` over `domain` segments, draw the curve, draw `highlights`) and shows it in the canvas UI (e.g. a floating plot window). If parsing is uncertain, the system should ask for clarification or fall back to hints instead of guessing silently.
+
+#### Other structured object types to consider (demo-complete, low complexity)
+
+These are suggestions to discuss with the team (not all required for the first demo):
+
+- **`HintCard`**: a structured hint payload (`title`, short `message`, optional `steps` list, optional `relatedExpression`) that renders as a floating note/card near the trigger (e.g. near a drawn `?`).
+- **`ErrorMark`**: points to a target in the student work (by element ids, or by a text/expression match description, or by a bounding region) plus `severity`, `message`, and `style` intent (e.g. red). Rendering can be deterministic (apply red styling / draw underline/marker) once the target is resolved.
+- **`FunctionSummary`** (lightweight): extracted facts such as `expression`, `domainNote`, `derivativeExpression` (if known), `criticalPoints` list—useful to feed plotting/highlights or to show a small structured panel.
+- **`AlignmentCheckResult`** (optional): structured result of “check this step/expression” with `ok: boolean`, `issues: [{ regionRef, message, suggestedFix? }]` to drive red marks + hints.
+
+The theme: **parse → structured object → deterministic render/action**. For the hackathon, prefer a **small, explicit schema** per object type (versionable later) over trying to cover every case.
+
+### Relation to the canvas (page-based, floating windows)
+
+- The end product is **page-based**; structured outputs (plots, hint cards) should attach conceptually to the **current page** and be positionable (e.g. pinned near the student’s work).
+- **Floating windows/panels on the canvas** are a good fit for plot views and for “explain this step” cards so they do not permanently clutter the page until the student chooses to keep them (product decision).
+- Persistence: decide per object type whether AI-generated artifacts are **ephemeral** (session-only) or **saved** as part of the document model (may require extending the shared element/schema later).
 
 ---
 
@@ -308,13 +368,14 @@ Depending on implementation, useful inputs include:
 
 - The **document’s elements** (full canvas state) from `GET /api/documents/{id}/elements` (or a client-side snapshot): strokes, text, positions.
 - **Spatial context** around a trigger (e.g. bounding region near a drawn `?`, or the region the student is working in).
+- **OCR/recognition candidates** from strokes/text regions (when using the OCR + agentic pipeline described in [AI pipeline: OCR + agentic interaction (design direction)](#ai-pipeline-ocr--agentic-interaction-design-direction)).
 - **Parsed intent**: “I need a hint about the next step”, “check my solution”, “plot f(x)=…” (may come from gestures, nearby text, or explicit UI actions).
 - Subject metadata (future): math vs chemistry, topic tags—today not modeled explicitly in the API.
 
 ### Possible output modalities (align with UI team)
 
 - **Annotations on the canvas**: new `Element`s such as text/note hints, highlighted marks (often using `style.color = "red"` for errors), arrows/markers.
-- **Plots/graphics**: represented as strokes/geometry elements (or a future dedicated element kind). For the demo, a pragmatic approach is to generate drawable geometry (e.g. polylines as strokes) from computed points.
+- **Plots/graphics**: represented as strokes/geometry elements (or a future dedicated element kind). For the demo, a pragmatic approach is to generate drawable geometry (e.g. polylines as strokes) from computed points. Prefer the **structured-object + deterministic render** path when possible (see the OCR/agentic design section): e.g. produce a `PlotSpec`, then compute and draw the curve/highlights deterministically (often shown in a **floating window/panel** on the page-based canvas).
 - **Structured feedback** (optional): short explanations returned alongside canvas actions (could be shown in a side panel later); the hackathon demo emphasizes **in-canvas** effects.
 
 ### Representation guidance
@@ -349,9 +410,10 @@ Depending on implementation, useful inputs include:
 These are known constraints of the current codebase (useful context for scoping the AI demo):
 
 - Autosave is **polling-based** (periodic batch replace) in the web client.
-- tldraw integration is focused on a **single page** experience in this build.
+- The current prototype is centered on a **single-page** editor flow in this build; the **target UX is page-based** (multiple pages/worksheets per document) and will be formalized over time.
 - Some tldraw features are not persisted in the same way as a full tldraw document (see comments in code/docs): e.g. bound arrows may be treated as free arrows in persistence, and some complex shapes/assets/groups may not be fully persisted yet.
 - The backend stores generic JSON blobs for `style`/`data`, which is good for extension but means **validation of new AI-produced element kinds** should be handled carefully by clients/services.
+- AI/OCR structured outputs (e.g. plot specs, hint cards) are a **design direction**: start with small schemas and deterministic rendering (e.g. floating windows on the page-based canvas) before expanding scope.
 
 ---
 
