@@ -318,6 +318,15 @@
 		.tl-container {
 			border-radius: var(--radius);
 		}
+
+		/* hide the tldraw watermark (see tldraw SDK license terms) */
+		.tl-watermark_SEE-LICENSE,
+		.tl-watermark_SEE-LICENSE * {
+			display: none !important;
+			visibility: hidden !important;
+			opacity: 0 !important;
+			pointer-events: none !important;
+		}
 	</style>
 </head>
 <body>
