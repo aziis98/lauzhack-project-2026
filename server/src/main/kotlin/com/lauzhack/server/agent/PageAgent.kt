@@ -193,6 +193,14 @@ class KoogPageAgent(
                - domain: the window that best shows the definition; prefer the natural domain
                  (Math.sqrt(1-x*x) -> [-1, 1]); about [-5, 5] when nothing is special.
                  For two variables pick "domain" and "domainY" so the surface reads well.
+               - studentDomain: when the STUDENT wrote the domain in their work —
+                 "x ∈ (0, 1]", "0 < x ≤ 1", "|x| < 1", "dom f = [−1, 2)", for
+                 one-variable functions — extract it here with the boundary
+                 semantics they wrote: "fromClosed"/"toClosed" true for closed ends
+                 (≤, ≥, [, ]), false for strict ones (<, >, (, )); unbounded ends
+                 have "from"/"to" null. For two-variable functions use intervals
+                 describing the region they wrote (a square when they bound both
+                 variables). Leave it empty when they did not state a domain.
                - points: the special points THE STUDENT COMPUTED about this function on
                  the page — zeros, critical points, extrema, evaluated values — extracted
                  from the transcribed work, closed forms converted to numbers (1/√2 -> 0.707).

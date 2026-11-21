@@ -76,3 +76,7 @@ external open class SphereGeometry(radius: Double, widthSegments: Int, heightSeg
 external open class GridHelper(size: Double, divisions: Int, colorCenterLine: Int, colorGrid: Int) {
     val position: Vector3
 }
+
+/** The colored x/y/z tripod, so the surface's orientation reads while orbiting. */
+@JsName("AxesHelper")
+external open class AxesHelper(size: Double)

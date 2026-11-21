@@ -103,6 +103,11 @@ internal val Plot3D = FC<Plot3DProps> { props ->
                 scene.add(grid)
                 disposables.add(grid)
 
+                // colored x/y/z tripod: orientation reads while orbiting
+                val axes = com.lauzhack.web.three.AxesHelper(span * 0.42)
+                scene.add(axes)
+                disposables.add(axes)
+
                 // the points the STUDENT computed
                 val sphereGeo = SphereGeometry(span * 0.02, 16, 16)
                 val redMaterial = MeshBasicMaterial(js("({ color: 0xc62828 })"))

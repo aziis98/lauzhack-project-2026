@@ -71,6 +71,8 @@ sealed interface AgentAction {
         val domain: List<PlotInterval> = listOf(PlotInterval(-5.0, 5.0)),
         /** Range of the second variable (defaults to a square with the x domain). */
         val domainY: PlotInterval? = null,
+        /** The domain as the STUDENT wrote it (e.g. x ∈ (0, 1]), when they did. */
+        val studentDomain: List<DomainInterval> = emptyList(),
         /** The special points the STUDENT computed about this function on the page. */
         val points: List<PlotPoint> = emptyList(),
         /** Withdraw a previously emitted plot with the same id. */
@@ -91,6 +93,18 @@ sealed interface AgentAction {
 
 @Serializable
 data class PlotInterval(val from: Double, val to: Double)
+
+/**
+ * An interval the STUDENT wrote for the domain, with boundary semantics:
+ * `x ∈ (0, 1]` → from 0 open, to 1 closed; unbounded ends are null (infinity).
+ */
+@Serializable
+data class DomainInterval(
+    val from: Double? = null,
+    val fromClosed: Boolean = false,
+    val to: Double? = null,
+    val toClosed: Boolean = false,
+)
 
 /**
  * A point the student computed about a function (zero, critical point, extremum,

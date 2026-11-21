@@ -18,7 +18,7 @@ private val plotApi = DrawingApi()
 
 private const val POLL_MILLIS = 1500L
 internal const val PLOT_PANEL_WIDTH = 340.0
-internal const val PLOT_PANEL_HEIGHT = 240.0
+internal const val PLOT_PANEL_HEIGHT = 268.0
 private const val BTN_GAP = 12.0
 
 /**
@@ -30,6 +30,9 @@ private const val BTN_GAP = 12.0
  */
 val PlotLayer = FC<Props> {
     var plots by useState<List<PlotWithAnchor>>(emptyList())
+    // plots the user closed with the ✕ on the button: hidden until the agent
+    // re-emits them with new content (then they are new information)
+    var suppressed by useState<Map<String, String>>(emptyMap())
 
     useEffectOnce {
         val documentId = canvasDocumentId ?: return@useEffectOnce
@@ -41,16 +44,20 @@ val PlotLayer = FC<Props> {
         }
     }
 
-    for (entry in plots) {
+    val visible = plots.filter { suppressed[it.plot.id] != it.plot.toString() }
+
+    for (entry in visible) {
         PlotEntry {
             key = Key(entry.plot.id)
             this.entry = entry
+            this.onHide = { suppressed = suppressed + (entry.plot.id to entry.plot.toString()) }
         }
     }
 }
 
 private external interface PlotEntryProps : Props {
     var entry: PlotWithAnchor
+    var onHide: () -> Unit
 }
 
 private val PlotEntry = FC<PlotEntryProps> { props ->
@@ -62,7 +69,7 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
     // right of the defining chunk, or a fallback spot under the exercise statement
     val btnLeft = if (anchor != null) anchor.maxX + BTN_GAP else 64.0
     val btnTop = if (anchor != null) anchor.minY else 160.0
-    val (panelLeft, panelTop) = dragged ?: (btnLeft to btnTop + 44.0)
+    val (panelLeft, panelTop) = dragged ?: (btnLeft to btnTop + 56.0)
 
     val fnName = plot.functionName ?: "f"
     val is3D = plot.variableY != null
@@ -79,8 +86,26 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
         // and the click would never complete
         onPointerDown = { it.stopPropagation() }
         onClick = { open = !open }
-        ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
-        +"Plot $fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""})"
+        ReactHTML.div {
+            className = ClassName("plot-btn-top")
+            ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
+            +"Plot"
+        }
+        ReactHTML.span {
+            className = ClassName("plot-btn-label")
+            +"$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""})"
+        }
+        ReactHTML.span {
+            className = ClassName("plot-btn-close")
+            title = "Hide this plot"
+            asDynamic()["aria-label"] = "Hide plot button"
+            onPointerDown = { it.stopPropagation() }
+            onClick = {
+                it.stopPropagation() // don't toggle the panel open
+                props.onHide()
+            }
+            +"✕"
+        }
     }
 
     if (open) {
@@ -139,7 +164,16 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
             }
 
             if (is3D) {
-                Plot3D { this.plot = plot }
+                // content key: the 3D scene remounts (and rebuilds) whenever the
+                // action's content changes — new points, new domain, new expression
+                Plot3D {
+                    key = Key(
+                        plot.id + "|" + plot.expression + "|" +
+                            plot.domain.toString() + "|" + (plot.domainY?.toString() ?: "") + "|" +
+                            plot.points.toString() + "|" + plot.studentDomain.toString()
+                    )
+                    this.plot = plot
+                }
             } else {
                 PlotSvg { this.plot = plot }
             }
@@ -183,6 +217,11 @@ internal fun buildPlotSvg(plot: AgentAction.PlotAction, width: Double, height: D
     val x0 = intervals.minOf { it.from }
     val x1 = intervals.maxOf { it.to }
 
+    // the number-line diagram under the axis (the student's written domain)
+    val hasDiagram = plot.studentDomain.isNotEmpty()
+    val diagramTop = height - 32.0
+    val chartHeight = if (hasDiagram) diagramTop - 4.0 else height
+
     val padL = 36.0
     val padR = 10.0
     val padT = 8.0
@@ -216,16 +255,16 @@ internal fun buildPlotSvg(plot: AgentAction.PlotAction, width: Double, height: D
     y1 += padY
 
     fun sx(x: Double) = padL + (x - x0) / (x1 - x0) * (width - padL - padR)
-    fun sy(y: Double) = height - padB - (y - y0) / (y1 - y0) * (height - padT - padB)
-    fun syClamped(y: Double) = sy(y).coerceIn(0.0, height)
+    fun sy(y: Double) = chartHeight - padB - (y - y0) / (y1 - y0) * (chartHeight - padT - padB)
+    fun syClamped(y: Double) = sy(y).coerceIn(0.0, chartHeight)
 
     val sb = StringBuilder()
     sb.append("<svg width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\" xmlns=\"http://www.w3.org/2000/svg\">")
 
     // grid + tick labels
     for (t in niceTicks(x0, x1, 6) { sx(it) }) {
-        sb.append("<line x1=\"${fmt(t.screen)}\" y1=\"0\" x2=\"${fmt(t.screen)}\" y2=\"${fmt(height)}\" stroke=\"#e7e2d8\" stroke-width=\"1\"/>")
-        sb.append("<text x=\"${fmt(t.screen - 8)}\" y=\"${fmt(height - 6)}\" fill=\"#555\" font-size=\"9.5\">${fmt(t.value)}</text>")
+        sb.append("<line x1=\"${fmt(t.screen)}\" y1=\"0\" x2=\"${fmt(t.screen)}\" y2=\"${fmt(chartHeight)}\" stroke=\"#e7e2d8\" stroke-width=\"1\"/>")
+        sb.append("<text x=\"${fmt(t.screen - 8)}\" y=\"${fmt(chartHeight - 6)}\" fill=\"#555\" font-size=\"9.5\">${fmt(t.value)}</text>")
     }
     for (t in niceTicks(y0, y1, 4) { sy(it) }) {
         sb.append("<line x1=\"0\" y1=\"${fmt(t.screen)}\" x2=\"${fmt(width)}\" y2=\"${fmt(t.screen)}\" stroke=\"#e7e2d8\" stroke-width=\"1\"/>")
@@ -233,10 +272,10 @@ internal fun buildPlotSvg(plot: AgentAction.PlotAction, width: Double, height: D
     }
 
     // axes on zero when visible, else on the frame
-    val axisY = if (y0 <= 0.0 && y1 >= 0.0) sy(0.0) else height - padB
+    val axisY = if (y0 <= 0.0 && y1 >= 0.0) sy(0.0) else chartHeight - padB
     val axisX = if (x0 <= 0.0 && x1 >= 0.0) sx(0.0) else padL
     sb.append("<line x1=\"0\" y1=\"${fmt(axisY)}\" x2=\"${fmt(width)}\" y2=\"${fmt(axisY)}\" stroke=\"#55504a\" stroke-width=\"1.2\"/>")
-    sb.append("<line x1=\"${fmt(axisX)}\" y1=\"0\" x2=\"${fmt(axisX)}\" y2=\"${fmt(height)}\" stroke=\"#55504a\" stroke-width=\"1.2\"/>")
+    sb.append("<line x1=\"${fmt(axisX)}\" y1=\"0\" x2=\"${fmt(axisX)}\" y2=\"${fmt(chartHeight)}\" stroke=\"#55504a\" stroke-width=\"1.2\"/>")
 
     // the curve
     sb.append("<path d=\"")
@@ -260,6 +299,35 @@ internal fun buildPlotSvg(plot: AgentAction.PlotAction, width: Double, height: D
         sb.append("<text x=\"${fmt(sx(p.x) + 6)}\" y=\"${fmt(sy(y) - 6)}\" fill=\"#c62828\" font-size=\"10\" font-weight=\"700\">")
         sb.append(label.xmlEscape())
         sb.append("</text>")
+    }
+
+    // the number-line diagram: the domain as the student wrote it
+    if (hasDiagram) {
+        val lineY = diagramTop + 16.0
+        sb.append("<line x1=\"0\" y1=\"${fmt(lineY)}\" x2=\"${fmt(width)}\" y2=\"${fmt(lineY)}\" stroke=\"#55504a\" stroke-width=\"1.1\"/>")
+        for (d in plot.studentDomain) {
+            val fromX = d.from?.let { sx(it) }?.coerceIn(padL * 0.4, width - padR) ?: padL * 0.4
+            val toX = d.to?.let { sx(it) }?.coerceIn(padL * 0.4, width - padR) ?: width - padR
+            // included span
+            sb.append("<rect x=\"${fmt(fromX)}\" y=\"${fmt(lineY - 5)}\" width=\"${fmt((toX - fromX).coerceAtLeast(0.0))}\" height=\"10\" fill=\"#dcd0ff\" fill-opacity=\"0.85\" stroke=\"#1a1a1a\" stroke-width=\"1\"/>")
+            // boundaries: filled circle = closed end, empty circle = strict inequality
+            if (d.from != null) {
+                sb.append(
+                    if (d.fromClosed) "<circle cx=\"${fmt(fromX)}\" cy=\"${fmt(lineY)}\" r=\"4\" fill=\"#1a1a1a\"/>"
+                    else "<circle cx=\"${fmt(fromX)}\" cy=\"${fmt(lineY)}\" r=\"4\" fill=\"${'#'}fff8ec\" stroke=\"#1a1a1a\" stroke-width=\"1.5\"/>"
+                )
+            } else {
+                sb.append("<text x=\"4\" y=\"${fmt(lineY + 3)}\" fill=\"#1a1a1a\" font-size=\"11\" font-weight=\"700\">∞</text>")
+            }
+            if (d.to != null) {
+                sb.append(
+                    if (d.toClosed) "<circle cx=\"${fmt(toX)}\" cy=\"${fmt(lineY)}\" r=\"4\" fill=\"#1a1a1a\"/>"
+                    else "<circle cx=\"${fmt(toX)}\" cy=\"${fmt(lineY)}\" r=\"4\" fill=\"${'#'}fff8ec\" stroke=\"#1a1a1a\" stroke-width=\"1.5\"/>"
+                )
+            } else {
+                sb.append("<text x=\"${fmt(width - 14)}\" y=\"${fmt(lineY + 3)}\" fill=\"#1a1a1a\" font-size=\"11\" font-weight=\"700\">∞</text>")
+            }
+        }
     }
 
     sb.append("</svg>")
