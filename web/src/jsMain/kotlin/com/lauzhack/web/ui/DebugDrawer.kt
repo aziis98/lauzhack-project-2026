@@ -12,6 +12,7 @@ import react.Key
 import react.Props
 import react.dom.html.ReactHTML
 import react.useEffect
+import react.useEffectOnce
 import react.useRef
 import react.useState
 import web.cssom.ClassName
@@ -48,6 +49,12 @@ val DebugDrawer = FC<DebugDrawerProps> { props ->
     var open by useState(DebugState.drawerOpen)
     var showPrompts by useState(false)
     var expanded by useState<String?>(null)
+    var version by useState(0)
+
+    // re-render whenever the poller publishes new data (same channel as the canvas layer)
+    useEffectOnce {
+        DebugState.listen { version += 1 }
+    }
 
     // window position (page px); null until the user drags it
     var pos by useState<Pair<Double, Double>?>(null)
