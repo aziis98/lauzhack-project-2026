@@ -99,17 +99,25 @@ class HintService(
      */
     suspend fun reserveButtonHint(documentId: String): Hint {
         val lowest = pageTranscription(documentId).maxByOrNull { it.chunk.bounds.maxY }?.chunk?.bounds
+        return reserveAt(documentId, lowest ?: BoundingBox(560.0, 320.0, 600.0, 360.0), "with the button")
+    }
+
+    /** Reserves a THINKING card for a clicked word of the exercise statement, next to it. */
+    suspend fun reserveDefinition(documentId: String, anchor: BoundingBox): Hint =
+        reserveAt(documentId, anchor, "for a word of the statement")
+
+    private suspend fun reserveAt(documentId: String, anchor: BoundingBox, how: String): Hint {
         val s = docs.computeIfAbsent(documentId) { DocState() }
         return s.mutex.withLock {
             val hint = Hint(
                 id = "hint-${s.nextId++}",
                 triggerChunkId = null,
-                anchor = lowest ?: BoundingBox(560.0, 320.0, 600.0, 360.0),
+                anchor = anchor,
                 status = HintStatus.THINKING,
                 createdAt = clock(),
             )
             s.hints[hint.id] = hint
-            log.info("doc {}: hint requested with the button ({})", documentId, hint.id)
+            log.info("doc {}: hint requested {} ({})", documentId, how, hint.id)
             hint
         }
     }

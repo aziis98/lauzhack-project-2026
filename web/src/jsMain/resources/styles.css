@@ -1236,3 +1236,15 @@ input:focus { background: var(--yellow); }
 	cursor: pointer;
 }
 .hint-level-name { min-width: 52px; }
+
+/* ------- clickable words/formulas of the exercise statement (PageLayers.kt) ------- */
+.exercise-body .ex-word,
+.exercise-body .katex {
+	pointer-events: auto; /* the box itself stays click-through */
+	cursor: help;
+	border-radius: 4px;
+	transition: background-color 120ms;
+}
+.exercise-body .ex-word:hover,
+.exercise-body .katex:hover { background: var(--accent-soft); }
+.exercise-body .ex-active { background: #fde68a; }

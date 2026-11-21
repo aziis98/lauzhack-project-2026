@@ -114,6 +114,13 @@ class DrawingApi(
     suspend fun requestHint(documentId: String): Boolean =
         client.post("$api/documents/$documentId/hints").status.value in 200..299
 
+    /** The student clicked a word (or formula) of the exercise statement: explain it. */
+    suspend fun defineTerm(documentId: String, request: com.lauzhack.shared.dto.DefineTermRequest): Boolean =
+        client.post("$api/documents/$documentId/hints/define") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.status.value in 200..299
+
     /** "Another hint" for a card the student did not understand. */
     suspend fun moreHint(documentId: String, hintId: String): Boolean =
         client.post("$api/documents/$documentId/hints/$hintId/more").status.value in 200..299

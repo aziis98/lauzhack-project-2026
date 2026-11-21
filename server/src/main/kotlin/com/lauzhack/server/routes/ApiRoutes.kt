@@ -149,6 +149,17 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
                     val hint = agent.requestHelp(id)
                     if (hint == null) call.respond(HttpStatusCode.ServiceUnavailable) else call.respond(HttpStatusCode.Created, hint)
                 }
+                // The student clicked a word or formula of the exercise statement.
+                post("define") {
+                    val id = call.parameters["id"]!!
+                    val request = call.receive<com.lauzhack.shared.dto.DefineTermRequest>()
+                    if (getDocument(id) == null || request.term.isBlank()) {
+                        call.respond(HttpStatusCode.BadRequest)
+                        return@post
+                    }
+                    val hint = agent.requestDefinition(id, request)
+                    if (hint == null) call.respond(HttpStatusCode.ServiceUnavailable) else call.respond(HttpStatusCode.Created, hint)
+                }
                 // "Another hint" for a card the student did not understand.
                 post("{hid}/more") {
                     val hint = agent.requestMoreHelp(call.parameters["id"]!!, call.parameters["hid"]!!)

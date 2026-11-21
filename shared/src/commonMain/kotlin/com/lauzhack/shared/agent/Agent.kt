@@ -51,10 +51,14 @@ data class PageDelta(
  *
  * @property requestId the id of the hint card waiting for the answer
  * @property kind `"button"`: the Help button, no point on the page indicated;
- *   `"more"`: the student did not understand the hints already shown in that card
+ *   `"more"`: the student did not understand the hints already shown in that card;
+ *   `"define"`: the student clicked a word (or formula) of the exercise statement
+ *   and wants its meaning clarified
  * @property nearChunkId `"button"`: the most recent block of work (lowest on the page), if any
  * @property triggerChunkId `"more"`: the circled "?" the card answers, if it came from one
  * @property previousHints `"more"`: what the card already said, oldest first
+ * @property term `"define"`: the exact word or formula (LaTeX) the student clicked
+ * @property context `"define"`: the sentence of the statement around it, math as `$…$`
  */
 @Serializable
 data class HelpRequest(
@@ -63,6 +67,8 @@ data class HelpRequest(
     val nearChunkId: String? = null,
     val triggerChunkId: String? = null,
     val previousHints: List<String> = emptyList(),
+    val term: String? = null,
+    val context: String? = null,
 )
 
 /**

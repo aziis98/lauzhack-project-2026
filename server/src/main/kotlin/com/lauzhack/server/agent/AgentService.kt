@@ -101,6 +101,21 @@ class AgentService(
     }
 
     /**
+     * The student clicked a word (or formula) of the exercise statement: reserves a
+     * card next to it and asks the agent to clarify the concept it belongs to.
+     * Null when the agent is disabled.
+     */
+    suspend fun requestDefinition(documentId: String, request: com.lauzhack.shared.dto.DefineTermRequest): Hint? {
+        if (agent == null) return null
+        val hint = hints.reserveDefinition(documentId, request.anchor)
+        enqueue(
+            documentId,
+            HelpRequest(requestId = hint.id, kind = "define", term = request.term.trim(), context = request.context.trim()),
+        )
+        return hint
+    }
+
+    /**
      * "Another hint": the student did not understand the card; the agent answers in
      * the same card with a more concrete hint. Null when the hint is unknown.
      */

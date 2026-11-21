@@ -66,9 +66,11 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
                 "content": "clean text, bbox already stripped",
                 "raw": "original with \\bbox markers (only when they differ)" }
 
-      REQUEST = { "requestId": "hint-4", "kind": "button" | "more",
+      REQUEST = { "requestId": "hint-4", "kind": "button" | "more" | "define",
                   "nearChunkId": "chunk-9", "triggerChunkId": "chunk-7",
-                  "previousHints": [ "title: message", ... ] }      // fields may be null/empty
+                  "previousHints": [ "title: message", ... ],
+                  "term": "critici", "context": "Determinare i punti critici di ${'$'}f${'$'}." }
+                                                                  // fields may be null/empty
 
       "requests" lists EXPLICIT help requests made since your previous turn (usually
       empty). They are answered with HINT actions, see below.
@@ -136,6 +138,26 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
          hint for the same step, MORE CONCRETE than the last one and worded
          differently — e.g. name the exact rule, point at the exact term, or ask a
          smaller question — but still never the solution or the result.
+       - kind "define": the student CLICKED a word (or a formula, given as LaTeX) in
+         the EXERCISE STATEMENT and wants to know what it means. "term" is exactly what
+         they clicked; "context" is the sentence around it.
+         * First work out WHICH CONCEPT they mean: a word is often part of a longer
+           term — "critici" in "punti critici" means "critical point", "massimo" in
+           "massimo relativo" means "local maximum", "inscritto" in "rettangolo
+           inscritto in una semicirconferenza" means "inscribed". Clarify that whole
+           concept, as it is used in THIS sentence, not the isolated word.
+         * "title": the concept's name. "message": a
+           clear, correct definition in 1-2 sentences, in plain words with Unicode
+           math. For a formula, say what it denotes and how to read it.
+         * "steps" (optional, at most 2): a tiny example, or what the concept means
+           for THIS exercise — e.g. "here: the x where f'(x) = 0". Never solve the
+           exercise or give its results.
+         * hintLevel tunes the extra help, never the definition itself: MINIMAL = the
+           definition only; MEDIUM = plus one line on how it applies here; GUIDED =
+           plus how to use it in the next step of this exercise.
+         * "Another hint" on a definition arrives as kind "more" with the definition
+           in "previousHints": explain the same concept again, more simply, with an
+           example.
 
     2. PLOT — a function definition should be visualized.
        { "kind": "plot", "id": "plot-<source chunk id>", "functionName": "f",
