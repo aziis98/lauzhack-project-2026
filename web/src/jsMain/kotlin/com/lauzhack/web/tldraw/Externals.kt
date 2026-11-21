@@ -21,6 +21,7 @@ external interface TldrawProps : Props {
 }
 
 external interface Editor {
+    val store: TlStore
     fun getCurrentPageId(): String
     fun getCurrentPageShapes(): Array<TlRecord>
     fun createShapes(shapes: Array<dynamic>)
@@ -30,6 +31,20 @@ external interface Editor {
     fun zoomIn()
     fun zoomOut()
     fun resetZoom()
+    fun getCurrentPageBounds(): Box?
+    fun setCameraOptions(opts: dynamic)
+}
+
+external interface TlStore {
+    fun listen(onHistory: (entry: dynamic) -> Unit, filters: dynamic): () -> Unit
+}
+
+/** An axis-aligned box (page space). */
+external interface Box {
+    val x: Double
+    val y: Double
+    val w: Double
+    val h: Double
 }
 
 /** A tldraw store record (shapes, pages, bindings, ...). */
