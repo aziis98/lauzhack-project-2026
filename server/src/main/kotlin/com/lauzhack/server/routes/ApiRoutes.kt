@@ -139,12 +139,12 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
                         call.respond(HttpStatusCode.NotFound)
                         return@post
                     }
-                    val hint = hints.request(id)
+                    val hint = agent.requestHelp(id)
                     if (hint == null) call.respond(HttpStatusCode.ServiceUnavailable) else call.respond(HttpStatusCode.Created, hint)
                 }
                 // "Another hint" for a card the student did not understand.
                 post("{hid}/more") {
-                    val hint = hints.more(call.parameters["id"]!!, call.parameters["hid"]!!)
+                    val hint = agent.requestMoreHelp(call.parameters["id"]!!, call.parameters["hid"]!!)
                     if (hint == null) call.respond(HttpStatusCode.NotFound) else call.respond(hint)
                 }
                 // The student dragged the card: { "x": …, "y": … } in page coordinates.

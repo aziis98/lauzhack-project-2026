@@ -47,9 +47,10 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
     - The first message (or the first after a restart) is a full PAGE snapshot; every
       message after it is a delta. Both are JSON:
 
-      page    -> { "type": "page",    "chunks": [ CHUNK, ... ], "exercise": "..." }
+      page    -> { "type": "page",    "chunks": [ CHUNK, ... ], "exercise": "...",
+                                      "requests": [ REQUEST, ... ] }
       changes -> { "type": "changes", "added": [ CHUNK, ... ], "modified": [ CHUNK, ... ],
-                                            "removed": [ "chunk-7", ... ] }
+                                            "removed": [ "chunk-7", ... ], "requests": [ REQUEST, ... ] }
 
       "exercise", when present, is the statement of the problem the student is
       solving, set by the teacher. Use it to understand what the work is aiming
@@ -59,6 +60,13 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
                 "kind": "MATH" | "TEXT" | "HINT_REQUEST" | "DRAWING" | "UNREADABLE",
                 "content": "clean text, bbox already stripped",
                 "raw": "original with \\bbox markers (only when they differ)" }
+
+      REQUEST = { "requestId": "hint-4", "kind": "button" | "more",
+                  "nearChunkId": "chunk-9", "triggerChunkId": "chunk-7",
+                  "previousHints": [ "title: message", ... ] }      // fields may be null/empty
+
+      "requests" lists EXPLICIT help requests made since your previous turn (usually
+      empty). They are answered with HINT actions, see below.
 
     - Bounds are page coordinates; y grows DOWNWARDS. Use them to know what is near what
       and the reading order (top-to-bottom, left-to-right).
@@ -98,6 +106,19 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
          solution.
        - If the work next to the "?" contains a clear mistake, you may pair the hint
          with an ERROR action.
+
+       EXPLICIT REQUESTS — every entry of "requests" MUST get exactly one HINT whose
+       "requestId" is that entry's requestId ("triggerChunkId" may then be omitted).
+       Requests are never answered with silence.
+       - kind "button": the student pressed the Help button without pointing anywhere.
+         Help with the step they are on NOW: the most recent work, usually the lowest
+         blocks on the page ("nearChunkId" is the lowest one). If the page is empty,
+         help them get started on the exercise.
+       - kind "more": the student did not understand the hint(s) in "previousHints"
+         (oldest first), given for the circled "?" "triggerChunkId" if set. Give a NEW
+         hint for the same step, MORE CONCRETE than the last one and worded
+         differently — e.g. name the exact rule, point at the exact term, or ask a
+         smaller question — but still never the solution or the result.
 
     2. PLOT — a function definition should be visualized.
        { "kind": "plot", "id": "plot-<source chunk id>", "functionName": "f",
@@ -271,6 +292,17 @@ class KoogPageAgent(
                         domain = listOf(PlotInterval(-2.0, 2.0)),
                         domainY = PlotInterval(-2.0, 2.0),
                         points = listOf(PlotPoint(0.0, 0.0, 0.0, "min")),
+                    )
+                )
+            ),
+            AgentOutput(
+                listOf(
+                    AgentAction.HintAction(
+                        id = "hint-4",
+                        requestId = "hint-4",
+                        title = "Look at the inner function",
+                        message = "√(1−x²) is a composition: what is its derivative by the chain rule?",
+                        relatedChunkIds = listOf("chunk-3"),
                     )
                 )
             ),

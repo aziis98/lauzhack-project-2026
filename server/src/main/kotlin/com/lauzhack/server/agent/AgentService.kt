@@ -7,10 +7,12 @@ import com.lauzhack.server.ocr.TranscriptionEvent
 import com.lauzhack.shared.agent.AgentAction
 import com.lauzhack.shared.agent.AgentOutput
 import com.lauzhack.shared.agent.ConversationMessage
+import com.lauzhack.shared.agent.HelpRequest
 import com.lauzhack.shared.agent.PageChunk
 import com.lauzhack.shared.agent.PageDelta
 import com.lauzhack.shared.agent.PageSnapshot
 import com.lauzhack.shared.agent.PlotWithAnchor
+import com.lauzhack.shared.hint.Hint
 import com.lauzhack.shared.hint.HintCard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +45,10 @@ import java.util.concurrent.ConcurrentHashMap
  * Hints are adopted into [HintService] (card, anchor, dismissal); plots and errors
  * are served as-is for the client to render.
  *
+ * Explicit help (the toolbar Help button, "Another hint") also goes through the
+ * conversation: the card is reserved in [HintService], a [HelpRequest] rides along
+ * with the next message, and the model answers it with a hint carrying its requestId.
+ *
  * @param agent null disables everything (no API key).
  */
 class AgentService(
@@ -66,6 +72,8 @@ class AgentService(
         val pendingAdded = LinkedHashMap<String, PageChunk>()
         val pendingModified = LinkedHashMap<String, PageChunk>()
         val pendingRemoved = LinkedHashSet<String>()
+        /** Explicit help requests not yet sent (or whose turn failed and will be retried). */
+        val pendingRequests = ArrayList<HelpRequest>()
         var lastOutput: AgentOutput = AgentOutput()
         /** Whether the persisted conversation (if any) has been loaded. */
         var restored = false
@@ -75,6 +83,50 @@ class AgentService(
 
     fun start(events: Flow<TranscriptionEvent>): Job = scope.launch {
         events.collect { handle(it) }
+    }
+
+    /**
+     * Toolbar Help button: reserves a card and asks the agent for a hint about the
+     * work the student is on now. Null when hints are disabled.
+     */
+    suspend fun requestHelp(documentId: String): Hint? {
+        if (agent == null) return hints.request(documentId) // legacy generator, if configured
+        val hint = hints.reserveButtonHint(documentId)
+        val lowest = ocr.snapshot(documentId).maxByOrNull { it.chunk.bounds.maxY }?.chunk?.id
+        enqueue(documentId, HelpRequest(requestId = hint.id, kind = "button", nearChunkId = lowest))
+        return hint
+    }
+
+    /**
+     * "Another hint": the student did not understand the card; the agent answers in
+     * the same card with a more concrete hint. Null when the hint is unknown.
+     */
+    suspend fun requestMoreHelp(documentId: String, hintId: String): Hint? {
+        if (agent == null) return hints.more(documentId, hintId)
+        val (hint, fresh) = hints.reserveMore(documentId, hintId) ?: return null
+        if (fresh) {
+            enqueue(
+                documentId,
+                HelpRequest(
+                    requestId = hint.id,
+                    kind = "more",
+                    triggerChunkId = hint.triggerChunkId,
+                    previousHints = hint.history.map { "${it.title}: ${it.message}" },
+                ),
+            )
+        }
+        return hint
+    }
+
+    private suspend fun enqueue(documentId: String, request: HelpRequest) {
+        val agent = agent ?: return
+        val s = docs.computeIfAbsent(documentId) { DocState() }
+        s.mutex.withLock {
+            ensureRestoredLocked(documentId, s)
+            s.pendingRequests += request
+            s.job?.cancel()
+            s.job = scope.launch { evaluate(documentId, s, agent) }
+        }
     }
 
     /** The agent's latest answer for the document (debug/inspection, like the OCR endpoints). */
@@ -136,6 +188,7 @@ class AgentService(
         val self = currentCoroutineContext()[Job]
         var bootstrap = false
         var committed = false
+        var sentRequests: List<HelpRequest> = emptyList()
         try {
             val page = settledPage(documentId)
 
@@ -148,10 +201,15 @@ class AgentService(
             var sentRemoved: List<String> = emptyList()
             s.mutex.withLock {
                 if (self?.isCancelled == true) return
+                sentRequests = s.pendingRequests.toList()
                 if (!s.bootstrapped) {
-                    if (page.isEmpty()) return
+                    if (page.isEmpty() && sentRequests.isEmpty()) return
                     userMessage = json.encodeToString(
-                        PageSnapshot(chunks = page.map { it.toPageChunk() }, exercise = exercise(documentId))
+                        PageSnapshot(
+                            chunks = page.map { it.toPageChunk() },
+                            exercise = exercise(documentId),
+                            requests = sentRequests,
+                        )
                     )
                     bootstrap = true
                     // The snapshot covers everything buffered so far; changes that arrive
@@ -162,13 +220,20 @@ class AgentService(
                     s.pendingAdded.clear()
                     s.pendingModified.clear()
                     s.pendingRemoved.clear()
-                } else if (s.pendingAdded.isEmpty() && s.pendingModified.isEmpty() && s.pendingRemoved.isEmpty()) {
+                } else if (s.pendingAdded.isEmpty() && s.pendingModified.isEmpty() && s.pendingRemoved.isEmpty() &&
+                    sentRequests.isEmpty()
+                ) {
                     return // nothing new since the last turn
                 } else {
                     sentAdded = s.pendingAdded.values.toList()
                     sentModified = s.pendingModified.values.toList()
                     sentRemoved = s.pendingRemoved.toList()
-                    val delta = PageDelta(added = sentAdded, modified = sentModified, removed = sentRemoved)
+                    val delta = PageDelta(
+                        added = sentAdded,
+                        modified = sentModified,
+                        removed = sentRemoved,
+                        requests = sentRequests,
+                    )
                     userMessage = json.encodeToString(delta)
                 }
                 history = s.history.toList()
@@ -183,6 +248,7 @@ class AgentService(
                 for (c in sentAdded) if (s.pendingAdded[c.id] == c) s.pendingAdded.remove(c.id)
                 for (c in sentModified) if (s.pendingModified[c.id] == c) s.pendingModified.remove(c.id)
                 for (id in sentRemoved) s.pendingRemoved.remove(id)
+                s.pendingRequests.removeAll(sentRequests.toSet())
                 s.history.add(ConversationMessage("user", userMessage))
                 s.history.add(ConversationMessage("assistant", json.encodeToString(output)))
                 trim(s.history)
@@ -191,6 +257,12 @@ class AgentService(
                 persist(documentId, s)
             }
             apply(documentId, page, output)
+            // a request the model left unanswered would keep its card thinking forever
+            val answered = output.actions.filterIsInstance<AgentAction.HintAction>().map { it.requestId }.toSet()
+            for (r in sentRequests) if (r.requestId !in answered) {
+                log.warn("doc {}: help request {} left unanswered", documentId, r.requestId)
+                hints.fail(documentId, r.requestId)
+            }
             log.info("doc {}: {} action(s)", documentId, output.actions.size)
         } catch (e: CancellationException) {
             // a newer change re-schedules the evaluation: if this was the bootstrap
@@ -200,6 +272,12 @@ class AgentService(
         } catch (e: Exception) {
             if (bootstrap && !committed) revertBootstrap(s)
             log.warn("agent failed for doc {}: {}", documentId, e.message)
+            // page changes retry with the next delta, but a waiting card must not hang:
+            // report the failure (the student can ask again)
+            if (!committed && sentRequests.isNotEmpty()) {
+                s.mutex.withLock { s.pendingRequests.removeAll(sentRequests.toSet()) }
+                for (r in sentRequests) hints.fail(documentId, r.requestId)
+            }
         } finally {
             withContext(NonCancellable) {
                 s.mutex.withLock { if (s.job === self) s.job = null }
@@ -233,6 +311,12 @@ class AgentService(
         for (action in output.actions) {
             when (action) {
                 is AgentAction.HintAction -> {
+                    if (action.requestId.isNotBlank()) {
+                        // answer to an explicit request: the card is already reserved
+                        hints.complete(documentId, action.requestId, action.toCard())
+                        log.info("doc {}: hint for request {}", documentId, action.requestId)
+                        continue
+                    }
                     val trigger = byId[action.triggerChunkId] ?: continue
                     val hintId = hints.request(
                         documentId = documentId,
@@ -240,16 +324,7 @@ class AgentService(
                         contentHash = trigger.chunk.contentHash,
                         anchor = trigger.chunk.bounds,
                     ) ?: continue // already answered or dismissed for this exact circled "?"
-                    hints.complete(
-                        documentId = documentId,
-                        hintId = hintId,
-                        card = HintCard(
-                            title = action.title.trim(),
-                            message = action.message.trim(),
-                            steps = action.steps.map { it.trim() }.filter { it.isNotEmpty() },
-                            relatedChunkIds = action.relatedChunkIds,
-                        ),
-                    )
+                    hints.complete(documentId = documentId, hintId = hintId, card = action.toCard())
                     log.info("doc {}: hint {} for {}", documentId, hintId, action.triggerChunkId)
                 }
 
@@ -269,6 +344,13 @@ class AgentService(
             }
         }
     }
+
+    private fun AgentAction.HintAction.toCard() = HintCard(
+        title = title.trim(),
+        message = message.trim(),
+        steps = steps.map { it.trim() }.filter { it.isNotEmpty() },
+        relatedChunkIds = relatedChunkIds,
+    )
 
     /** The page once every chunk is transcribed, or as it is after the timeout. */
     private suspend fun settledPage(docId: String): List<com.lauzhack.shared.ocr.TranscribedChunk> {

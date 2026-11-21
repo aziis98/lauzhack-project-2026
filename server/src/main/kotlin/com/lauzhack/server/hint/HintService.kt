@@ -67,12 +67,37 @@ class HintService(
     }
 
     /**
-     * Help asked with the toolbar button (no circled ?). The card is anchored
-     * next to the lowest block of work, or near the top of an empty page.
-     * Returns null when hints are disabled.
+     * Help asked with the toolbar button (no circled ?), answered by the legacy
+     * generator. Returns null when it is disabled (the page agent path uses
+     * [reserveButtonHint] instead).
      */
     suspend fun request(documentId: String): Hint? {
         val generator = generator ?: return null
+        val hint = reserveButtonHint(documentId)
+        val s = docs.getValue(documentId)
+        s.mutex.withLock { s.jobs[hint.id] = scope.launch { answer(documentId, s, hint, generator) } }
+        return hint
+    }
+
+    /**
+     * "Another hint" answered by the legacy generator; null when it is disabled
+     * or the hint is unknown (the page agent path uses [reserveMore]).
+     */
+    suspend fun more(documentId: String, hintId: String): Hint? {
+        val generator = generator ?: return null
+        val (hint, fresh) = reserveMore(documentId, hintId) ?: return null
+        if (fresh) {
+            val s = docs.getValue(documentId)
+            s.mutex.withLock { s.jobs[hintId] = scope.launch { answer(documentId, s, hint, generator) } }
+        }
+        return hint
+    }
+
+    /**
+     * Reserves a THINKING card for the toolbar Help button, anchored next to the
+     * lowest block of work (or near the top of an empty page). No model call.
+     */
+    suspend fun reserveButtonHint(documentId: String): Hint {
         val lowest = pageTranscription(documentId).maxByOrNull { it.chunk.bounds.maxY }?.chunk?.bounds
         val s = docs.computeIfAbsent(documentId) { DocState() }
         return s.mutex.withLock {
@@ -84,22 +109,22 @@ class HintService(
                 createdAt = clock(),
             )
             s.hints[hint.id] = hint
-            s.jobs[hint.id] = scope.launch { answer(documentId, s, hint, generator) }
             log.info("doc {}: hint requested with the button ({})", documentId, hint.id)
             hint
         }
     }
 
     /**
-     * "Another hint": the student did not understand this one. The current card
-     * moves to [Hint.history] and a new, more concrete one is generated in the same box.
+     * "Another hint": the student did not understand this card. Its current card
+     * moves to [Hint.history] and the box goes back to THINKING, waiting for a new,
+     * more concrete hint. Returns the hint and whether it was newly reserved
+     * (false when it was already thinking); null when the hint is unknown.
      */
-    suspend fun more(documentId: String, hintId: String): Hint? {
-        val generator = generator ?: return null
+    suspend fun reserveMore(documentId: String, hintId: String): Pair<Hint, Boolean>? {
         val s = docs[documentId] ?: return null
         return s.mutex.withLock {
             val old = s.hints[hintId] ?: return@withLock null
-            if (old.status == HintStatus.THINKING) return@withLock old
+            if (old.status == HintStatus.THINKING) return@withLock old to false
             val hint = old.copy(
                 status = HintStatus.THINKING,
                 history = old.history + listOfNotNull(old.card),
@@ -107,8 +132,7 @@ class HintService(
                 error = null,
             )
             s.hints[hintId] = hint
-            s.jobs[hintId] = scope.launch { answer(documentId, s, hint, generator) }
-            hint
+            hint to true
         }
     }
 
@@ -234,12 +258,21 @@ class HintService(
         }
     }
 
-    /** Fill a hint reserved by [request]; no-op if it was removed meanwhile. */
+    /** Fill a reserved hint; no-op if it was removed meanwhile. */
     suspend fun complete(documentId: String, hintId: String, card: HintCard) {
         val s = docs[documentId] ?: return
         s.mutex.withLock {
             val hint = s.hints[hintId] ?: return
-            s.hints[hintId] = hint.copy(status = HintStatus.READY, card = card)
+            s.hints[hintId] = hint.copy(status = HintStatus.READY, card = card, error = null)
+        }
+    }
+
+    /** A reserved hint could not be answered: show the error in its card. */
+    suspend fun fail(documentId: String, hintId: String, message: String = "Couldn't generate a hint. Please try again.") {
+        val s = docs[documentId] ?: return
+        s.mutex.withLock {
+            val hint = s.hints[hintId] ?: return
+            if (hint.status == HintStatus.THINKING) s.hints[hintId] = hint.copy(status = HintStatus.FAILED, error = message)
         }
     }
 }

@@ -26,6 +26,8 @@ data class PageSnapshot(
     val chunks: List<PageChunk>,
     /** The problem the student is solving, if the document has one. */
     val exercise: String = "",
+    /** Explicit help requests made since the previous turn (see [HelpRequest]). */
+    val requests: List<HelpRequest> = emptyList(),
 )
 
 /** One delta turn: what changed on the page since the previous message. */
@@ -35,6 +37,28 @@ data class PageDelta(
     val added: List<PageChunk> = emptyList(),
     val modified: List<PageChunk> = emptyList(),
     val removed: List<String> = emptyList(),
+    /** Explicit help requests made since the previous turn (see [HelpRequest]). */
+    val requests: List<HelpRequest> = emptyList(),
+)
+
+/**
+ * The student asked for help explicitly, not with a circled "?". The agent must
+ * answer it with a [AgentAction.HintAction] whose `requestId` is [requestId].
+ *
+ * @property requestId the id of the hint card waiting for the answer
+ * @property kind `"button"`: the Help button, no point on the page indicated;
+ *   `"more"`: the student did not understand the hints already shown in that card
+ * @property nearChunkId `"button"`: the most recent block of work (lowest on the page), if any
+ * @property triggerChunkId `"more"`: the circled "?" the card answers, if it came from one
+ * @property previousHints `"more"`: what the card already said, oldest first
+ */
+@Serializable
+data class HelpRequest(
+    val requestId: String,
+    val kind: String,
+    val nearChunkId: String? = null,
+    val triggerChunkId: String? = null,
+    val previousHints: List<String> = emptyList(),
 )
 
 /**
@@ -48,12 +72,17 @@ data class AgentOutput(val actions: List<AgentAction> = emptyList())
 @Serializable
 sealed interface AgentAction {
 
-    /** A circled "?" ([PageChunk.kind] `HINT_REQUEST`) asks for a Socratic hint card. */
+    /**
+     * A Socratic hint card: answers a circled "?" ([PageChunk.kind] `HINT_REQUEST`,
+     * [triggerChunkId]) or an explicit [HelpRequest] ([requestId]).
+     */
     @Serializable
     @SerialName("hint")
     data class HintAction(
         val id: String = "",
-        val triggerChunkId: String,
+        val triggerChunkId: String = "",
+        /** Set when answering a [HelpRequest]: its requestId. */
+        val requestId: String = "",
         val title: String,
         val message: String,
         val steps: List<String> = emptyList(),
