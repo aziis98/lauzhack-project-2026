@@ -83,7 +83,8 @@ The repo is a working **drawing app** (Lauzhack Draw) that serves as the base ca
 
 ### Canvas/editor behavior (current → target)
 
-- The canvas is effectively **chrome-free** in the main drawing view (floating back button). tldraw’s default UI panels are hidden in this build; interaction follows the app’s current configuration.
+- The canvas is effectively **chrome-free** in the main drawing view: only a floating **back button** and a minimal floating **tool pill** (top-center) remain. All of tldraw's own UI is hidden — minimap, zoom controls, menus, default toolbar, pages, the right-side **style panel**, and selection quick actions. Keyboard shortcuts (V, D, E, R, A, T) mirror the pill. Note: with the style panel hidden there is **no color picker yet** — shapes use the current default style.
+- The canvas behaves like a **vertical scrolling document**: the camera is constrained to a tall page (**960×4800**) with `contain` behavior — the mouse wheel pans vertically instead of zooming, zooming out past the fit zoom pins the page, and zooming in keeps the camera inside the document bounds (`wheelBehavior: pan`, `initialZoom: fit-x-100`). This is a first step toward the **page-based** target below.
 - **Target:** a **page-based** workspace (explicit pages/worksheets per document/exercise flow), not an infinite whiteboard in the final product. The current prototype integration may behave like a single page today; page structure will be formalized as the product evolves.
 - Supported content today (via the shared model + tldraw mapping) includes shapes such as **strokes/drawings, basic geometries (rectangle/ellipse/triangle/diamond/cloud), text/note, arrows** (arrows are persisted in a simplified/free form in current MVP behavior). Unknown/future element kinds can be extended in the shared model.
 
@@ -423,6 +424,7 @@ These are known constraints of the current codebase (useful context for scoping 
 - Ktor **3.6.1** (server + client)
 - Exposed **1.6.1**, SQLite (`sqlite-jdbc`)
 - Kotlin/JS + React (kotlin-wrappers), **tldraw 5.6.2** (pinned)
+- Typography & icons: **Open Sans + JetBrains Mono** (Fontsource), **Phosphor** Regular webfont
 - Build: Gradle (wrapper included)
 
 For day-to-day commands, see [Running in development](#running-in-development) and [Production build](#production-build).
