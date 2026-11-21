@@ -186,11 +186,16 @@ class KoogPageAgent(
         }
         log.info("page-agent user message:\n{}", userMessage)
 
+        val start = System.nanoTime()
         val out = executor
             .executeStructured(request, model, serializer<AgentOutput>(), examples = EXAMPLES)
             .getOrThrow()
             .data
-
+        val elapsedMs = (System.nanoTime() - start) / 1_000_000
+        log.info(
+            "agent-timing: model={}ms reasoning_effort={} history_turns={} answer_chars={}",
+            elapsedMs, reasoningEffort, history.size, json.encodeToString(out).length,
+        )
         log.info("page-agent answer:\n{}", json.encodeToString(out))
         return out
     }

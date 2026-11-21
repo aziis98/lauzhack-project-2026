@@ -80,6 +80,8 @@ class KoogChunkRecognizer(
     private val reasoningEffort: ReasoningEffort = ReasoningEffort.NONE,
 ) : ChunkRecognizer {
 
+    private val log = org.slf4j.LoggerFactory.getLogger(KoogChunkRecognizer::class.java)
+
     /** Wire format the model fills in; kept separate from the shared domain type. */
     @Serializable
     private data class OcrOutput(val kind: ChunkKind, val content: String)
@@ -92,8 +94,16 @@ class KoogChunkRecognizer(
                 image(AttachmentSource.Image(content = AttachmentContent.Binary.Bytes(png), format = "png"))
             }
         }.withParams(OpenAIChatParams(reasoningEffort = reasoningEffort))
+        val start = System.nanoTime()
         val output = executor.executeStructured(request, model, serializer<OcrOutput>(), examples = EXAMPLES)
             .getOrThrow().data
+        log.info(
+            "ocr-model-timing: model={}ms reasoning_effort={} model_id={} fragments={}",
+            (System.nanoTime() - start) / 1_000_000,
+            reasoningEffort,
+            model.id,
+            fragments.size,
+        )
         return ChunkTranscription(output.kind, output.content.trim())
     }
 

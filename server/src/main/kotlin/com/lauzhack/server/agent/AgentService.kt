@@ -268,8 +268,9 @@ class AgentService(
     }
 
     /** The page once every chunk is transcribed, or as it is after the timeout. */
-    private suspend fun settledPage(docId: String): List<com.lauzhack.shared.ocr.TranscribedChunk> =
-        withTimeoutOrNull(settleTimeoutMillis) {
+    private suspend fun settledPage(docId: String): List<com.lauzhack.shared.ocr.TranscribedChunk> {
+        val start = System.nanoTime()
+        val settled = withTimeoutOrNull(settleTimeoutMillis) {
             var page = ocr.snapshot(docId)
             while (page.any { it.transcription == null }) {
                 delay(settlePollMillis)
@@ -277,6 +278,15 @@ class AgentService(
             }
             page
         } ?: ocr.snapshot(docId)
+        log.info(
+            "agent-settle doc {}: waited={}ms (timeout={}ms) pending={}",
+            docId,
+            (System.nanoTime() - start) / 1_000_000,
+            settleTimeoutMillis,
+            settled.count { it.transcription == null },
+        )
+        return settled
+    }
 
     private fun com.lauzhack.shared.ocr.TranscribedChunk.toPageChunk() = PageChunk(
         id = chunk.id,

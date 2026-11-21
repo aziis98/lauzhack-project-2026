@@ -122,12 +122,26 @@ class OcrService(
     ) {
         val self = currentCoroutineContext()[Job]
         try {
+            val jobStart = System.nanoTime()
             delay(debounceMillis)
+            val afterDebounce = System.nanoTime()
             val png = withContext(Dispatchers.Default) { rasterizer.render(chunk.bounds, strokes) }
             val result = permits.withPermit {
+                val permitAcquired = System.nanoTime()
                 // pre-segmentation: symbol fragment coordinates ground the model's bboxes
                 val fragments = withContext(Dispatchers.Default) { annotator.annotate(png) }
-                recognizer.recognize(png, fragments)
+                val afterSegment = System.nanoTime()
+                val recognized = recognizer.recognize(png, fragments)
+                val afterModel = System.nanoTime()
+                log.info(
+                    "ocr-timing doc {} {}: debounce={}ms segment={}ms model={}ms total={}ms",
+                    docId, chunk.id,
+                    (afterDebounce - jobStart) / 1_000_000,
+                    (afterSegment - permitAcquired) / 1_000_000,
+                    (afterModel - afterSegment) / 1_000_000,
+                    (afterModel - jobStart) / 1_000_000,
+                )
+                recognized
             }
             synchronized(cache) { cache[chunk.contentHash] = result }
             log.info("doc {} {} v{}: {} {}", docId, chunk.id, chunk.version, result.kind, result.content)
