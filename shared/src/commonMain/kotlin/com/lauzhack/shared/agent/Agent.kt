@@ -13,7 +13,10 @@ data class PageChunk(
     val maxY: Double,
     /** ChunkKind name: MATH, TEXT, HINT_REQUEST, DRAWING, UNREADABLE. */
     val kind: String,
+    /** Clean transcription (bbox markers stripped) — what the model reads for semantics. */
     val content: String,
+    /** Raw OCR with \bbox markers — for locating symbols; null when identical to content. */
+    val raw: String? = null,
 )
 
 /** The bootstrap message: the whole page, when the conversation starts (or restarts). */

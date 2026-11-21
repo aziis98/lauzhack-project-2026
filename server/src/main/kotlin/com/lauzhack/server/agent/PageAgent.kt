@@ -57,13 +57,20 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
 
       CHUNK = { "id": "chunk-3", "bounds": { "minX", "minY", "maxX", "maxY" },
                 "kind": "MATH" | "TEXT" | "HINT_REQUEST" | "DRAWING" | "UNREADABLE",
-                "content": "..." }
+                "content": "clean text, bbox already stripped",
+                "raw": "original with \\bbox markers (only when they differ)" }
 
     - Bounds are page coordinates; y grows DOWNWARDS. Use them to know what is near what
       and the reading order (top-to-bottom, left-to-right).
     - MATH content is LaTeX; TEXT is prose with ${'$'}inline math${'$'}; DRAWING content is a
       description of the sketch; HINT_REQUEST is a circled "?" — the student asking for
       help; UNREADABLE means the transcription failed.
+    - Each chunk has TWO text fields: "content" is the CLEAN transcription with the
+      OCR's \bbox[a,b,c,d]{…} markers already stripped — read THIS one to understand
+      the math. "raw" is the original with the markers, useful only when you need
+      the exact position of individual symbols on the page (e.g. to point at a
+      specific character in an error message). For all reasoning, plotting, error
+      detection and hint writing, use "content".
     - Your previous answers are part of the conversation. Treat them as COMMITMENTS:
       hints you gave, functions you plotted, mistakes you flagged. As the page changes,
       keep them consistent: replace what changed, withdraw what disappeared.
@@ -117,6 +124,18 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
          * LITERAL FIDELITY: transcribe the student's math EXACTLY as written — never
            fix, simplify or complete it. If it is wrong, plot the wrong thing and flag
            it with an ERROR action.
+         * REFERENCES TO OTHER FUNCTIONS: when the expression calls a function the
+           student defined earlier in the conversation (A(x) = x·h(x) with
+           h(x) = √(1−x²) on the page), SUBSTITUTE the known definition into
+           the expression before writing it in JavaScript:
+           A(x) -> x*Math.sqrt(1-x*x). Substitute recursively while every
+           referenced function is defined in the conversation. If a referenced
+           function was NEVER defined on the page (and the exercise statement
+           does not give its formula), do NOT invent or guess it: emit an
+           ERROR action instead ("A(x) uses h(x), which is not defined on the
+           page") and do NOT plot that expression. After substitution the rest
+           of the expression stays literal: never simplify or rewrite beyond
+           expanding the references.
        - domain: the window that best shows the definition; prefer the natural domain
          (Math.sqrt(1-x*x) -> [-1, 1]); about [-5, 5] when nothing is special.
          For two variables pick "domain" and "domainY" so the surface reads well.

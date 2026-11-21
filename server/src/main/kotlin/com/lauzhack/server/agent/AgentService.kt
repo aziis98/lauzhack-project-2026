@@ -105,6 +105,8 @@ class AgentService(
                     // OCR still pending: not part of a delta until it is transcribed
                     val transcription = event.chunk.transcription ?: return@withLock
                     val chunk = event.chunk.chunk
+                    val rawContent = transcription.content
+                    val cleanContent = if (rawContent.isNotEmpty()) stripBboxes(rawContent) else rawContent
                     val pc = PageChunk(
                         id = chunk.id,
                         minX = chunk.bounds.minX,
@@ -112,7 +114,8 @@ class AgentService(
                         maxX = chunk.bounds.maxX,
                         maxY = chunk.bounds.maxY,
                         kind = transcription.kind.name,
-                        content = transcription.content,
+                        content = cleanContent,
+                        raw = if (rawContent != cleanContent) rawContent else null,
                     )
                     s.pendingRemoved.remove(chunk.id)
                     if (!s.bootstrapped || s.knownChunks.add(chunk.id)) {
@@ -288,15 +291,55 @@ class AgentService(
         return settled
     }
 
-    private fun com.lauzhack.shared.ocr.TranscribedChunk.toPageChunk() = PageChunk(
-        id = chunk.id,
-        minX = chunk.bounds.minX,
-        minY = chunk.bounds.minY,
-        maxX = chunk.bounds.maxX,
-        maxY = chunk.bounds.maxY,
-        kind = transcription?.kind?.name ?: "UNREADABLE",
-        content = transcription?.content.orEmpty(),
-    )
+    private fun com.lauzhack.shared.ocr.TranscribedChunk.toPageChunk(): PageChunk {
+        val rawContent = transcription?.content.orEmpty()
+        val clean = if (rawContent.isNotEmpty()) stripBboxes(rawContent) else rawContent
+        return PageChunk(
+            id = chunk.id,
+            minX = chunk.bounds.minX,
+            minY = chunk.bounds.minY,
+            maxX = chunk.bounds.maxX,
+            maxY = chunk.bounds.maxY,
+            kind = transcription?.kind?.name ?: "UNREADABLE",
+            content = clean,
+            raw = if (rawContent != clean) rawContent else null,
+        )
+    }
+
+    companion object {
+        /**
+         * Strips \bbox[a,b,c,d]{…} markers (the OCR pipeline's per-glyph bounding
+         * boxes) keeping the inner content, with proper brace matching for nested
+         * LaTeX. Deterministic Kotlin — the model never has to do the stripping.
+         */
+        fun stripBboxes(text: String): String {
+            val sb = StringBuilder(text.length)
+            var i = 0
+            while (i < text.length) {
+                if (text.startsWith("\\bbox[", i)) {
+                    val bracketEnd = text.indexOf(']', i)
+                    if (bracketEnd > 0 && bracketEnd + 1 < text.length && text[bracketEnd + 1] == '{') {
+                        var depth = 1
+                        var j = bracketEnd + 2
+                        while (j < text.length && depth > 0) {
+                            if (text[j] == '{') depth++
+                            else if (text[j] == '}') depth--
+                            j++
+                        }
+                        sb.append(text, bracketEnd + 2, j - 1)
+                        i = j
+                    } else {
+                        sb.append(text[i])
+                        i++
+                    }
+                } else {
+                    sb.append(text[i])
+                    i++
+                }
+            }
+            return sb.toString().trim()
+        }
+    }
 
     fun forget(documentId: String) {
         docs.remove(documentId)?.job?.cancel()
