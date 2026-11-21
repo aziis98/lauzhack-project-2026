@@ -28,7 +28,7 @@ import javax.imageio.ImageIO
  *    dilation does not inflate the boxes
  * 5. drop components smaller than [minArea] pixels
  *
- * The fragments are sorted in reading order (minY, then minX) and renumbered.
+ * The fragments are sorted left-to-right (minX, then minY) and renumbered.
  */
 class SymbolAnnotator(
     /** Ink threshold on grayscale; pixels below are handwriting. */
@@ -89,11 +89,11 @@ class SymbolAnnotator(
             }
         }
 
-        // 5) drop noise, sort in reading order, renumber
+        // 5) drop noise, sort left-to-right, renumber
         return (0 until count)
             .filter { area[it] >= minArea && minX[it] <= maxX[it] }
             .map { SymbolFragment(it, minX[it], minY[it], maxX[it], maxY[it], area[it]) }
-            .sortedWith(compareBy({ it.minY }, { it.minX }))
+            .sortedWith(compareBy({ it.minX }, { it.minY }))
             .mapIndexed { index, fragment -> fragment.copy(id = index) }
     }
 

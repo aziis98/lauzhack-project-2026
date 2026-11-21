@@ -28,7 +28,7 @@ internal fun buildOcrUserText(fragments: List<SymbolFragment>): String {
         fragments.joinToString(" ") { "(${it.minX},${it.minY},${it.maxX},${it.maxY})" }
     }
     return "Transcribe this block.\n" +
-        "Symbol fragments detected in the image (minx,miny,maxx,maxy), reading order:\n" +
+        "Symbol fragments detected in the image (minx,miny,maxx,maxy), left to right:\n" +
         fragmentList
 }
 
@@ -47,7 +47,7 @@ internal val OCR_SYSTEM_PROMPT = """
     - UNREADABLE: illegible or empty.
 
     The message also lists the symbol fragments detected in the image, as
-    (minx,miny,maxx,maxy) in image pixel space, in reading order. Each fragment is one
+    (minx,miny,maxx,maxy) in image pixel space, left to right. Each fragment is one
     connected handwriting blob (strokes of the same symbol are already merged). In the
     image each fragment's region is shaded light gray behind the ink, so you can match a
     symbol to its coordinates.
