@@ -87,10 +87,15 @@ private val ErrorMarkView = FC<ErrorMarkProps> { props ->
         css.top = "${btnTop}px"
         asDynamic().style = css
         title = "Show the mistake"
-        // never let the canvas capture the pointer: tldraw's useCanvasEvents
-        // grabs it on canvas pointerdown and the click would never complete
+        // iPad/desktop: handle the tap at pointerup level — iOS click synthesis
+        // is unreliable under tldraw's canvas gesture handling. Stop pointerdown
+        // (prevents tldraw's pointer capture), then act on pointerup directly.
         onPointerDown = { it.stopPropagation() }
-        onClick = { open = !open }
+        onPointerUp = {
+            it.stopPropagation()
+            it.preventDefault()
+            open = !open
+        }
         ReactHTML.span { className = ClassName("ph"); +"ph-warning-circle" }
         +"Error"
         ReactHTML.span {
@@ -98,8 +103,9 @@ private val ErrorMarkView = FC<ErrorMarkProps> { props ->
             title = "Hide this mark"
             asDynamic()["aria-label"] = "Hide error mark"
             onPointerDown = { it.stopPropagation() }
-            onClick = {
+            onPointerUp = {
                 it.stopPropagation() // don't toggle the popup open
+                it.preventDefault()
                 props.onHide()
             }
             +"✕"
@@ -155,7 +161,11 @@ private val ErrorMarkView = FC<ErrorMarkProps> { props ->
                     title = "Close"
                     asDynamic()["aria-label"] = "Close error"
                     onPointerDown = { it.stopPropagation() }
-                    onClick = { open = false }
+                    onPointerUp = {
+                        it.stopPropagation()
+                        it.preventDefault()
+                        open = false
+                    }
                     +"✕"
                 }
             }
