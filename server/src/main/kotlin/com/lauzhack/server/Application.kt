@@ -26,11 +26,14 @@ fun Application.module() {
     }
 
     // Permissive in dev so the webpack dev server origin works; tighten for prod.
+    // The dev server proxies /api from :8081, so the backend sees a cross-origin
+    // Origin header; JSON bodies need non-simple content types allowed.
     install(CORS) {
         anyHost()
         allowMethod(HttpMethod.Put)
         allowMethod(HttpMethod.Patch)
         allowMethod(HttpMethod.Delete)
+        allowNonSimpleContentTypes = true
     }
 
     install(StatusPages) {
