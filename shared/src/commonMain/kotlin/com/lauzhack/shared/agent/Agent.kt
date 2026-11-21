@@ -28,6 +28,8 @@ data class PageSnapshot(
     val exercise: String = "",
     /** Explicit help requests made since the previous turn (see [HelpRequest]). */
     val requests: List<HelpRequest> = emptyList(),
+    /** Current hint detail level (HintLevel name), chosen by the student. */
+    val hintLevel: String = "MEDIUM",
 )
 
 /** One delta turn: what changed on the page since the previous message. */
@@ -39,6 +41,8 @@ data class PageDelta(
     val removed: List<String> = emptyList(),
     /** Explicit help requests made since the previous turn (see [HelpRequest]). */
     val requests: List<HelpRequest> = emptyList(),
+    /** Current hint detail level (HintLevel name), chosen by the student. */
+    val hintLevel: String = "MEDIUM",
 )
 
 /**

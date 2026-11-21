@@ -24,6 +24,22 @@ data class HintCard(
 enum class HintStatus { THINKING, READY, FAILED }
 
 /**
+ * How much a hint gives away, chosen by the student with a slider (per document).
+ * Every hint stays a hint: none of them states the final result.
+ */
+@Serializable
+enum class HintLevel {
+    /** A nudge: the idea or one short question, nothing more. */
+    MINIMAL,
+
+    /** The rule or method and where to apply it (the default). */
+    MEDIUM,
+
+    /** Leads the student close to the solution, step by step. */
+    GUIDED,
+}
+
+/**
  * A help request and its answer.
  *
  * @property triggerChunkId the chunk holding the circled "?"; null when asked with the toolbar button

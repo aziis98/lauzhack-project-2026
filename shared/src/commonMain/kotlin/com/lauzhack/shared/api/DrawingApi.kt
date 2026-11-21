@@ -60,6 +60,13 @@ class DrawingApi(
             setBody(CreateDocumentRequest(name, exercise))
         }.body()
 
+    /** Saves the hint detail level of a document (the slider on the canvas). */
+    suspend fun setHintLevel(documentId: String, level: com.lauzhack.shared.hint.HintLevel): Boolean =
+        client.patch("$api/documents/$documentId/hint-level") {
+            contentType(ContentType.Application.Json)
+            setBody(com.lauzhack.shared.dto.SetHintLevelRequest(level))
+        }.status.value in 200..299
+
     /** Converts a region selected on a PDF page into exercise Markdown + LaTeX. */
     suspend fun convertExerciseRegion(request: ConvertRegionRequest): ConvertRegionResponse {
         val response = client.post("$api/exercises/convert") {

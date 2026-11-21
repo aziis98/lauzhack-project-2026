@@ -67,6 +67,13 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
                 val doc = resolveDocument(id)
                 if (doc == null) call.respond(HttpStatusCode.NotFound) else call.respond(doc)
             }
+            // The hint detail slider: { "level": "MINIMAL" | "MEDIUM" | "GUIDED" }
+            patch("hint-level") {
+                val id = call.parameters["id"]!!
+                val request = call.receive<com.lauzhack.shared.dto.SetHintLevelRequest>()
+                val doc = com.lauzhack.server.db.setHintLevel(id, request.level)
+                if (doc == null) call.respond(HttpStatusCode.NotFound) else call.respond(doc)
+            }
             delete {
                 val id = call.parameters["id"]!!
                 if (deleteDocument(id)) {

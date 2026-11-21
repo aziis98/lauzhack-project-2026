@@ -14,6 +14,7 @@ import com.lauzhack.shared.agent.PageSnapshot
 import com.lauzhack.shared.agent.PlotWithAnchor
 import com.lauzhack.shared.hint.Hint
 import com.lauzhack.shared.hint.HintCard
+import com.lauzhack.shared.hint.HintLevel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -58,6 +59,8 @@ class AgentService(
     private val scope: CoroutineScope,
     private val json: Json,
     private val exercise: suspend (documentId: String) -> String = { "" },
+    /** The document's hint detail level (the slider), sent with every turn. */
+    private val hintLevel: suspend (documentId: String) -> HintLevel = { HintLevel.MEDIUM },
     private val settleTimeoutMillis: Long = 6000,
     private val settlePollMillis: Long = 300,
 ) {
@@ -191,6 +194,7 @@ class AgentService(
         var sentRequests: List<HelpRequest> = emptyList()
         try {
             val page = settledPage(documentId)
+            val level = hintLevel(documentId).name
 
             // build the user message from the buffer WITHOUT consuming it: on failure the
             // buffered changes retry with the next delta instead of being lost
@@ -209,6 +213,7 @@ class AgentService(
                             chunks = page.map { it.toPageChunk() },
                             exercise = exercise(documentId),
                             requests = sentRequests,
+                            hintLevel = level,
                         )
                     )
                     bootstrap = true
@@ -233,6 +238,7 @@ class AgentService(
                         modified = sentModified,
                         removed = sentRemoved,
                         requests = sentRequests,
+                        hintLevel = level,
                     )
                     userMessage = json.encodeToString(delta)
                 }
