@@ -2,6 +2,7 @@ package com.lauzhack.web.ui
 
 import com.lauzhack.shared.api.DrawingApi
 import com.lauzhack.shared.domain.Document
+import com.lauzhack.web.tldraw.Editor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,10 +22,23 @@ private val scope = CoroutineScope(Dispatchers.Default)
 private fun initialDocId(): String? =
     js("new URLSearchParams(window.location.search).get('doc')")
 
+private fun formatTime(ms: Long): String {
+    val date: dynamic = js("new Date()")
+    date.setTime(ms)
+    return date.toLocaleString().toString()
+}
+
+private fun nowTime(): String {
+    val date: dynamic = js("new Date()")
+    return date.toLocaleTimeString().toString()
+}
+
 val App = FC<Props> {
     var documents by useState<List<Document>?>(null)
     var selected by useState(initialDocId())
     var newName by useState("")
+    var activeEditor by useState<Editor?>(null)
+    var savedAt by useState<String?>(null)
 
     fun refresh() {
         scope.launch { documents = api.listDocuments() }
@@ -35,65 +49,128 @@ val App = FC<Props> {
     }
 
     val openId = selected
-    if (openId == null) {
-        ReactHTML.div {
-            className = ClassName("app")
 
-            ReactHTML.h1 { +"Lauzhack Draw" }
+    ReactHTML.div {
+        className = ClassName("page")
 
-            ReactHTML.div {
-                className = ClassName("toolbar")
-                ReactHTML.input {
-                    placeholder = "New drawing name"
-                    value = newName
-                    onChange = { event -> newName = event.target.value }
+        // ------- sticky top bar -------
+        ReactHTML.header {
+            className = ClassName("topbar")
+
+            if (openId == null) {
+                ReactHTML.div {
+                    className = ClassName("title")
+                    +"Lauzhack Draw"
                 }
+                ReactHTML.div { className = ClassName("grow") }
+                ReactHTML.span {
+                    className = ClassName("status")
+                    +"Kotlin · SQLite · tldraw"
+                }
+            } else {
                 ReactHTML.button {
-                    +"Create"
+                    className = ClassName("ghost")
+                    +"←"
                     onClick = { _ ->
-                        val name = newName.ifBlank { "Untitled" }
-                        scope.launch {
-                            api.createDocument(name)
-                            refresh()
+                        selected = null
+                        activeEditor = null
+                        savedAt = null
+                    }
+                }
+                ReactHTML.div {
+                    className = ClassName("title")
+                    val doc = documents?.find { it.id == openId }
+                    +(doc?.name ?: "Drawing")
+                }
+                Toolbar { editor = activeEditor }
+                ReactHTML.div { className = ClassName("grow") }
+                ReactHTML.span {
+                    className = ClassName("status")
+                    +(savedAt?.let { "Saved $it" } ?: "Not saved yet")
+                }
+            }
+        }
+
+        if (openId == null) {
+            // ------- home: documents as cards -------
+            ReactHTML.section {
+                className = ClassName("card card-pad")
+                ReactHTML.div {
+                    className = ClassName("create-row")
+                    ReactHTML.input {
+                        placeholder = "New drawing name…"
+                        value = newName
+                        onChange = { event -> newName = event.target.value }
+                    }
+                    ReactHTML.button {
+                        +"New drawing"
+                        onClick = { _ ->
+                            val name = newName.ifBlank { "Untitled" }
+                            scope.launch {
+                                api.createDocument(name)
+                                refresh()
+                            }
+                            newName = ""
                         }
-                        newName = ""
                     }
                 }
             }
 
             val docs = documents
-            if (docs == null) {
-                ReactHTML.p { +"Loading…" }
-            } else if (docs.isEmpty()) {
-                ReactHTML.p { +"No drawings yet — create one above." }
-            } else {
-                ReactHTML.ul {
-                    for (doc in docs) {
-                        ReactHTML.li {
-                            key = Key(doc.id)
-                            ReactHTML.button {
-                                +doc.name
-                                onClick = { _ -> selected = doc.id }
+            ReactHTML.section {
+                className = ClassName("card")
+                if (docs == null) {
+                    ReactHTML.p { className = ClassName("card-pad muted"); +"Loading…" }
+                } else if (docs.isEmpty()) {
+                    ReactHTML.p {
+                        className = ClassName("card-pad muted")
+                        +"No drawings yet — create your first one above."
+                    }
+                } else {
+                    ReactHTML.ul {
+                        className = ClassName("docs")
+                        for (doc in docs) {
+                            ReactHTML.li {
+                                key = Key(doc.id)
+                                ReactHTML.button {
+                                    className = ClassName("doc-row")
+                                    onClick = { _ -> selected = doc.id }
+                                    ReactHTML.span { +doc.name }
+                                    ReactHTML.span {
+                                        className = ClassName("muted")
+                                        +formatTime(doc.updatedAt)
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+        } else {
+            // ------- drawing: canvas card in the scrolling document -------
+            ReactHTML.section {
+                className = ClassName("card canvas-card")
+                ReactHTML.div {
+                    className = ClassName("canvas-fill")
+                    Canvas {
+                        documentId = openId
+                        onReady = { activeEditor = it }
+                        onSaved = { savedAt = nowTime() }
+                    }
+                }
+            }
 
-            ReactHTML.p {
-                className = ClassName("hint")
-                +"Drawings are stored in SQLite via the Kotlin backend. The canvas autosaves every 2.5s."
+            ReactHTML.section {
+                className = ClassName("card card-pad about")
+                ReactHTML.h2 { +"About this drawing" }
+                ReactHTML.p {
+                    className = ClassName("muted")
+                    +"Changes autosave to the Kotlin backend every 2.5 seconds and are stored as "
+                    +"tool-agnostic elements (strokes, geometry, text, arrows) in SQLite. "
+                    +"Minimap, zoom controls and menus are intentionally hidden — use the toolbar above. "
+                    +"Keyboard shortcuts still work (V, D, E, R, A, T)."
+                }
             }
-        }
-    } else {
-        ReactHTML.div {
-            className = ClassName("canvas-wrap")
-            ReactHTML.button {
-                className = ClassName("back")
-                +"← All drawings"
-                onClick = { _ -> selected = null }
-            }
-            Canvas { documentId = openId }
         }
     }
 }

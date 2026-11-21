@@ -1,5 +1,7 @@
 # Lauzhack Draw
 
+![Lauzhack Draw canvas](docs/hero.png)
+
 A cross-platform drawing app backend + web frontend, built with Kotlin.
 
 - **`server/`** — Ktor 3 + Exposed + SQLite REST backend (Kotlin/JVM)
@@ -8,6 +10,11 @@ A cross-platform drawing app backend + web frontend, built with Kotlin.
 - **`web/`** — Kotlin/JS + React (kotlin-wrappers) frontend with a
   [tldraw](https://tldraw.dev) infinite canvas, wired to the backend through a
   thin adapter layer
+
+The UI is a vertical scrolling document: a sticky top bar with a minimal
+tool selector and autosave indicator, the canvas as a large soft-shadowed
+card, and tldraw's own chrome (minimap, zoom controls, menus, default
+toolbar) hidden — the app drives the editor directly.
 
 The database stores **generic drawing data** (strokes, geometry, text, arrows
 with style/color info) — tldraw is just the web-facing editor. Android and iOS

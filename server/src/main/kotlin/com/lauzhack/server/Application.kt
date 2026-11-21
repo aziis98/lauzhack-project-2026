@@ -3,6 +3,7 @@ package com.lauzhack.server
 import com.lauzhack.server.db.initDatabase
 import com.lauzhack.server.db.jsonConfig
 import com.lauzhack.server.routes.apiRoutes
+import io.ktor.http.CacheControl
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -55,6 +56,9 @@ private fun io.ktor.server.routing.Routing.serveFrontendIfBuilt() {
         File("../web/build/dist/js/productionExecutable"),
     ).firstOrNull { it.isDirectory }
     if (dist != null) {
-        staticFiles("/", dist, index = "index.html")
+        staticFiles("/", dist, index = "index.html") {
+            // always revalidate so updated bundles are picked up immediately
+            cacheControl { listOf(CacheControl.NoCache(null)) }
+        }
     }
 }
