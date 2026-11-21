@@ -12,8 +12,11 @@ enum class ChunkKind {
     /** Prose (words), possibly with inline math. */
     TEXT,
 
-    /** A lone question mark: the student is asking for a hint. */
+    /** A lone question mark, not circled. */
     QUESTION_MARK,
+
+    /** A question mark enclosed in a circle: the student asks for a hint. */
+    HINT_REQUEST,
 
     /** A sketch, graph, arrow or other non-textual mark. */
     DRAWING,

@@ -2,7 +2,10 @@ package com.lauzhack.server
 
 import com.lauzhack.server.ai.AiModels
 import com.lauzhack.server.chunking.ChunkService
+import com.lauzhack.server.db.getDocument
 import com.lauzhack.server.db.initDatabase
+import com.lauzhack.server.hint.HintService
+import com.lauzhack.server.hint.KoogHintAgent
 import com.lauzhack.server.ocr.KoogChunkRecognizer
 import com.lauzhack.server.ocr.OcrService
 import com.lauzhack.server.db.jsonConfig
@@ -33,16 +36,24 @@ fun Application.module() {
     val ai = AiModels(
         togetherApiKey = setting("ai.togetherApiKey"),
         ocrModelId = setting("ai.ocrModel") ?: error("ai.ocrModel missing"),
+        hintModelId = setting("ai.hintModel") ?: error("ai.hintModel missing"),
         anthropicApiKey = setting("ai.anthropicApiKey"),
         reasoningModelId = setting("ai.reasoningModel") ?: error("ai.reasoningModel missing"),
     )
-    if (ai.ocrModel == null) environment.log.warn("TOGETHER_API_KEY not set: OCR disabled")
+    if (ai.ocrModel == null) environment.log.warn("TOGETHER_API_KEY not set: OCR and hints disabled")
     if (ai.reasoningModel == null) environment.log.warn("ANTHROPIC_API_KEY not set: reasoning model disabled")
     val ocr = OcrService(
         recognizer = ai.ocrModel?.let { KoogChunkRecognizer(ai.executor, it) },
         scope = this,
     )
     ocr.start(ChunkService.events)
+    val hints = HintService(
+        generator = ai.hintModel?.let { KoogHintAgent(ai.executor, it) },
+        scope = this,
+        pageTranscription = ocr::snapshot,
+        exercise = { id -> getDocument(id)?.exercise.orEmpty() },
+    )
+    hints.start(ocr.events)
 
     install(ContentNegotiation) {
         json(jsonConfig)
@@ -70,7 +81,7 @@ fun Application.module() {
     }
 
     routing {
-        apiRoutes(ocr)
+        apiRoutes(ocr, hints)
         serveFrontendIfBuilt()
     }
 }

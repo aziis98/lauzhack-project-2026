@@ -3,4 +3,4 @@ package com.lauzhack.shared.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class CreateDocumentRequest(val name: String)
+data class CreateDocumentRequest(val name: String, val exercise: String = "")

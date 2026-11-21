@@ -44,7 +44,7 @@ class KoogChunkRecognizer(
         val EXAMPLES = listOf(
             OcrOutput(ChunkKind.MATH, "\\int_0^1 x^2 \\, dx = \\frac{1}{3}"),
             OcrOutput(ChunkKind.TEXT, "Per il teorema di Rolle esiste ${'$'}c${'$'} tale che ${'$'}f'(c)=0${'$'}"),
-            OcrOutput(ChunkKind.QUESTION_MARK, ""),
+            OcrOutput(ChunkKind.HINT_REQUEST, ""),
         )
 
         val SYSTEM_PROMPT = """
@@ -54,7 +54,9 @@ class KoogChunkRecognizer(
             Classify the block as `kind`:
             - MATH: a formula, equation or calculation step.
             - TEXT: words or sentences, possibly with inline math.
-            - QUESTION_MARK: the block is only a question mark "?" (the student asks for help).
+            - HINT_REQUEST: a question mark "?" enclosed in a hand-drawn circle (or a closed loop
+              around it). This is how the student asks for help.
+            - QUESTION_MARK: a lone question mark "?" that is NOT circled.
             - DRAWING: a sketch, graph, arrow, box or other non-textual mark.
             - UNREADABLE: illegible or empty.
 
@@ -62,7 +64,7 @@ class KoogChunkRecognizer(
             - MATH: LaTeX, without $ delimiters. Use \\ to separate lines when there are several.
             - TEXT: plain text, with inline math as ${'$'}...${'$'}.
             - DRAWING: a short description of what is drawn.
-            - QUESTION_MARK, UNREADABLE: empty string.
+            - HINT_REQUEST, QUESTION_MARK, UNREADABLE: empty string.
 
             Transcribe LITERALLY: never fix mistakes, never complete or simplify expressions, never
             guess content that is not there. A wrong calculation must stay wrong in the transcription.

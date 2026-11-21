@@ -10,6 +10,8 @@ ai:
   # OCR: light vision model on Together AI. Without TOGETHER_API_KEY chunks stay un-transcribed.
   togetherApiKey: "$TOGETHER_API_KEY:"
   ocrModel: "$OCR_MODEL:deepseek-ai/DeepSeek-V4.1-Flash-1017"
-  # Reasoning (hints, checks, recall): heavy model on Anthropic.
+  # Hints for the circled "?": also on Together AI.
+  hintModel: "$HINT_MODEL:deepseek-ai/DeepSeek-V4.1-Flash"
+  # Heavy reasoning model on Anthropic (plots, checks, recall).
   anthropicApiKey: "$ANTHROPIC_API_KEY:"
   reasoningModel: "$REASONING_MODEL:claude-opus-5-5"

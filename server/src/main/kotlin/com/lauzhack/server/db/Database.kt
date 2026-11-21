@@ -23,11 +23,17 @@ fun initDatabase() {
     transaction {
         SchemaUtils.create(DocumentsTable, ElementsTable)
     }
+    // Databases created before the exercise column existed: add it (fails harmlessly if present).
+    runCatching {
+        transaction { exec("ALTER TABLE documents ADD COLUMN exercise TEXT NOT NULL DEFAULT ''") }
+    }
+    seedExampleExercises()
 }
 
 fun ResultRow.toDocument(): Document = Document(
     id = this[DocumentsTable.id],
     name = this[DocumentsTable.name],
+    exercise = this[DocumentsTable.exercise],
     updatedAt = this[DocumentsTable.updatedAt],
 )
 

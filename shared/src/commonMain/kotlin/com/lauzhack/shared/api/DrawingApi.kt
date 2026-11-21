@@ -3,6 +3,7 @@ package com.lauzhack.shared.api
 import com.lauzhack.shared.domain.Document
 import com.lauzhack.shared.domain.Element
 import com.lauzhack.shared.dto.CreateDocumentRequest
+import com.lauzhack.shared.hint.Hint
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -44,6 +45,9 @@ class DrawingApi(
             setBody(CreateDocumentRequest(name))
         }.body()
 
+    suspend fun getDocument(documentId: String): Document =
+        client.get("$api/documents/$documentId").body()
+
     suspend fun getElements(documentId: String): List<Element> =
         client.get("$api/documents/$documentId/elements").body()
 
@@ -61,6 +65,13 @@ class DrawingApi(
 
     suspend fun deleteElement(documentId: String, elementId: String): Boolean =
         client.delete("$api/documents/$documentId/elements/$elementId").status.value in 200..299
+
+    /** Hints answering the circled "?" drawn on the page. */
+    suspend fun getHints(documentId: String): List<Hint> =
+        client.get("$api/documents/$documentId/hints").body()
+
+    suspend fun dismissHint(documentId: String, hintId: String): Boolean =
+        client.delete("$api/documents/$documentId/hints/$hintId").status.value in 200..299
 
     companion object {
         /** Must mirror the server's JSON configuration exactly. */

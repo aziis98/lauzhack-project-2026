@@ -335,6 +335,23 @@ GET    /api/documents/{id}/transcription               [{ chunk, transcription |
 GET    /api/documents/{id}/chunks/{chunkId}/image.png  image sent to the OCR model        (debug)
 ```
 
+### Hints (circled "?")
+
+When the OCR classifies a chunk as `HINT_REQUEST` (a question mark drawn inside a
+circle), `HintService` waits for the rest of the page to be transcribed, then asks
+the hint agent (`KoogHintAgent`, `deepseek-ai/DeepSeek-V4.1-Flash` on Together AI,
+override with `HINT_MODEL`). The agent gets every chunk with its position and
+transcription, the trigger position and the hints already given on the page, and
+returns a `HintCard` (`title`, `message`, optional `steps`): a Socratic nudge for the
+next step, never the solution. Each circled `?` is answered once; erasing it removes
+its hint. The canvas polls the hints and shows them as floating cards next to the `?`
+(tldraw `OnTheCanvas` layer, page coordinates).
+
+```
+GET    /api/documents/{id}/hints            [{ id, triggerChunkId, anchor, status: THINKING|READY|FAILED, card }]
+DELETE /api/documents/{id}/hints/{hintId}   dismiss (not regenerated for the same "?")
+```
+
 ### Example: element JSON shape
 
 ```json
