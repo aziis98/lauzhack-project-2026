@@ -6,6 +6,7 @@ import org.jetbrains.exposed.v1.core.Table
 object DocumentsTable : Table("documents") {
     val id = varchar("id", 128)
     val name = varchar("name", 256)
+    val exercise = text("exercise").default("")
     val createdAt = long("created_at")
     val updatedAt = long("updated_at")
     override val primaryKey = PrimaryKey(id)

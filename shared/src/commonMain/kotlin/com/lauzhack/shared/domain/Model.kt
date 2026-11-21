@@ -17,6 +17,8 @@ data class Document(
     val id: String,
     val name: String,
     val updatedAt: Long = 0L,
+    /** Exercise statement in Markdown with `$…$` / `$$…$$` LaTeX math (KaTeX); empty for free drawings. */
+    val exercise: String = "",
 )
 
 @Serializable

@@ -16,13 +16,10 @@ import web.cssom.ClassName
 
 private val hintApi = DrawingApi()
 
-/** Document whose hints the layer shows; set by [Canvas] (tldraw slot components get no props). */
-internal var hintDocumentId: String? = null
 
 private const val POLL_MILLIS = 1500L
 private const val CARD_WIDTH = 280.0
 private const val CARD_GAP = 16.0
-private const val PAGE_WIDTH = 960.0
 
 /**
  * Hint cards for the circled "?" on the page. Mounted as tldraw's `OnTheCanvas`
@@ -34,7 +31,7 @@ val HintLayer = FC<Props> {
 
     // Polls the server; the effect's coroutine is cancelled when the canvas unmounts.
     useEffectOnce {
-        val documentId = hintDocumentId ?: return@useEffectOnce
+        val documentId = canvasDocumentId ?: return@useEffectOnce
         var last: List<Hint>? = null
         while (true) {
             runCatching { hintApi.getHints(documentId) }
@@ -49,7 +46,7 @@ val HintLayer = FC<Props> {
             this.hint = hint
             onDismiss = {
                 hints = hints.filter { it.id != hint.id }
-                hintDocumentId?.let { doc -> MainScope().launch { runCatching { hintApi.dismissHint(doc, hint.id) } } }
+                canvasDocumentId?.let { doc -> MainScope().launch { runCatching { hintApi.dismissHint(doc, hint.id) } } }
             }
         }
     }
@@ -83,14 +80,14 @@ private val HintCardView = FC<HintCardProps> { props ->
             ReactHTML.span {
                 className = ClassName("hint-title")
                 +when (hint.status) {
-                    HintStatus.THINKING -> "Sto pensando…"
-                    HintStatus.READY -> hint.card?.title ?: "Suggerimento"
-                    HintStatus.FAILED -> "Ops"
+                    HintStatus.THINKING -> "Thinking…"
+                    HintStatus.READY -> hint.card?.title ?: "Hint"
+                    HintStatus.FAILED -> "Oops"
                 }
             }
             ReactHTML.button {
                 className = ClassName("hint-close")
-                title = "Chiudi"
+                title = "Close"
                 onClick = { props.onDismiss() }
                 ReactHTML.span { className = ClassName("ph"); +"ph-x" }
             }
@@ -98,7 +95,7 @@ private val HintCardView = FC<HintCardProps> { props ->
 
         when (hint.status) {
             HintStatus.THINKING -> ReactHTML.div { className = ClassName("hint-dots"); +"• • •" }
-            HintStatus.FAILED -> ReactHTML.p { className = ClassName("hint-message"); +(hint.error ?: "Errore") }
+            HintStatus.FAILED -> ReactHTML.p { className = ClassName("hint-message"); +(hint.error ?: "Error") }
             HintStatus.READY -> hint.card?.let { card ->
                 ReactHTML.p { className = ClassName("hint-message"); +card.message }
                 if (card.steps.isNotEmpty()) {

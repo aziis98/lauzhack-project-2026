@@ -41,7 +41,7 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService) {
             if (name.isEmpty()) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "name must not be blank"))
             } else {
-                call.respond(HttpStatusCode.Created, createDocument(name))
+                call.respond(HttpStatusCode.Created, createDocument(name, request.exercise))
             }
         }
 

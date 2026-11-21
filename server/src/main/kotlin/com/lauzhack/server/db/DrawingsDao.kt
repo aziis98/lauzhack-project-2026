@@ -23,12 +23,17 @@ fun listDocuments(): List<Document> = transaction {
         .map { it.toDocument() }
 }
 
-fun createDocument(name: String): Document = transaction {
+fun createDocument(
+    name: String,
+    exercise: String = "",
+    id: String = "doc:" + UUID.randomUUID(),
+): Document = transaction {
     val ts = now()
-    val doc = Document("doc:" + UUID.randomUUID(), name, ts)
+    val doc = Document(id, name, ts, exercise)
     DocumentsTable.insert { row ->
         row[DocumentsTable.id] = doc.id
         row[DocumentsTable.name] = doc.name
+        row[DocumentsTable.exercise] = doc.exercise
         row[DocumentsTable.createdAt] = ts
         row[DocumentsTable.updatedAt] = ts
     }

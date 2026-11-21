@@ -36,6 +36,7 @@ class HintService(
     private val generator: HintGenerator?,
     private val scope: CoroutineScope,
     private val pageTranscription: suspend (documentId: String) -> List<TranscribedChunk>,
+    private val exercise: suspend (documentId: String) -> String = { "" },
     private val settleTimeoutMillis: Long = 6000,
     private val settlePollMillis: Long = 300,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -120,14 +121,14 @@ class HintService(
                     .sortedBy { it.createdAt }
                     .mapNotNull { it.card }
             }
-            val card = generator.generate(HintContext(page, trigger, previous))
+            val card = generator.generate(HintContext(page, trigger, previous, exercise(docId)))
             log.info("doc {} {}: {} — {}", docId, hint.id, card.title, card.message)
             hint.copy(status = HintStatus.READY, card = card)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             log.warn("hint {} failed for doc {}: {}", hint.id, docId, e.message)
-            hint.copy(status = HintStatus.FAILED, error = "Non sono riuscito a generare un suggerimento. Riprova.")
+            hint.copy(status = HintStatus.FAILED, error = "Couldn't generate a hint. Please try again.")
         }
         s.mutex.withLock {
             if (s.hints.containsKey(hint.id)) s.hints[hint.id] = result

@@ -19,6 +19,8 @@ data class HintContext(
     val trigger: TranscribedChunk,
     /** Hints already given on this page, oldest first (to make the next one more explicit). */
     val previousHints: List<HintCard>,
+    /** Exercise statement (Markdown + LaTeX); empty when the page has none. */
+    val exercise: String = "",
 )
 
 /** Produces a [HintCard] for a help request. */
@@ -62,6 +64,11 @@ class KoogHintAgent(
          * (page units, y grows downwards) and content; the trigger is marked.
          */
         fun describe(context: HintContext): String = buildString {
+            if (context.exercise.isNotBlank()) {
+                appendLine("Exercise statement:")
+                appendLine(context.exercise.trim())
+                appendLine()
+            }
             appendLine("The student's page, one block per line, top to bottom:")
             for (tc in context.page) {
                 val b = tc.chunk.bounds
@@ -90,16 +97,16 @@ class KoogHintAgent(
 
         private val EXAMPLES = listOf(
             HintOutput(
-                title = "Derivata di un prodotto",
-                message = "A(x) = 2x·√(1 − x²) è un prodotto di due funzioni di x. Quale regola usi per derivare f·g?",
-                steps = listOf("Chi sono f(x) e g(x)?", "Quanto vale la derivata di √(1 − x²)?"),
+                title = "Derivative of a product",
+                message = "A(x) = 2x·√(1 − x²) is a product of two functions of x. Which rule do you use to differentiate f·g?",
+                steps = listOf("What are f(x) and g(x)?", "What is the derivative of √(1 − x²)?"),
                 relatedChunkIds = listOf("chunk-3"),
             ),
         )
 
         private val SYSTEM_PROMPT = """
             You are a patient math tutor inside a handwriting app. A student is solving an exercise
-            on a page; their handwriting has been split into blocks and transcribed (LaTeX), each with
+            on a page (the exercise statement, when given, is printed at the top); their handwriting has been split into blocks and transcribed (LaTeX), each with
             its position on the page. The student drew a circled question mark to ask for help.
 
             Your job: give a HINT that unblocks the NEXT step, not the solution.
@@ -110,7 +117,7 @@ class KoogHintAgent(
               say where to look again, without correcting it for them.
             - Keep it short: `title` ≤ 6 words, `message` ≤ 2 sentences, at most 3 `steps`
               (optional sub-questions).
-            - Write in the language the student writes in (default: Italian).
+            - Write in the language of the exercise statement and of the student's notes (default: English).
             - Write math in plain Unicode (x², √, ≤, π, f'(x)), never LaTeX.
             - `relatedChunkIds`: ids of the blocks your hint refers to.
             - If the transcription is unclear, say so and ask the student to rewrite the unclear part.

@@ -33,7 +33,17 @@ external interface Editor {
     fun resetZoom()
     fun getCurrentPageBounds(): Box?
     fun setCameraOptions(opts: dynamic)
+    fun undo()
+    fun redo()
+    fun setStyleForNextShapes(style: dynamic, value: dynamic)
+    fun setStyleForSelectedShapes(style: dynamic, value: dynamic)
+    fun updateInstanceState(partial: dynamic)
+    fun getInstanceState(): dynamic
 }
+
+/** tldraw's shared color style prop (`black`, `blue`, `red`, `green`, …). */
+@JsName("DefaultColorStyle")
+external val DefaultColorStyle: dynamic
 
 external interface TlStore {
     fun listen(onHistory: (entry: dynamic) -> Unit, filters: dynamic): () -> Unit

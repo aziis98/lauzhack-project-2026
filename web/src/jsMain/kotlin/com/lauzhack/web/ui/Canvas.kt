@@ -37,7 +37,8 @@ private fun hiddenComponents(): dynamic {
     c.QuickActions = null    // left-side bar when a shape is selected
     c.HelperButtons = null   // "back to content" button
     c.ActionsMenu = null
-    c.OnTheCanvas = HintLayer // hint cards, in page coordinates
+    c.OnTheCanvas = PageOverlay // exercise statement + hint cards, in page coordinates
+    c.Grid = PaperGrid // squared paper sheet behind the shapes
     return c
 }
 
@@ -88,14 +89,15 @@ private fun documentCameraOptions(height: Double): dynamic {
 }
 
 /** Dimensions of the document page (page-space bounds). */
-private const val PAGE_WIDTH = 960.0
+internal const val PAGE_WIDTH = 960.0
 private const val PAGE_HEIGHT = 4800.0
 
 /** Extra room below the lowest content when the page auto-grows. */
 private const val PAGE_GROW_MARGIN = 800.0
 
 val Canvas = FC<CanvasProps> { props ->
-    hintDocumentId = props.documentId
+    canvasDocumentId = props.documentId
+    canvasPageHeight = PAGE_HEIGHT
     Tldraw {
         components = hiddenComponents()
         options = singlePageOptions()
@@ -104,12 +106,15 @@ val Canvas = FC<CanvasProps> { props ->
 
             // ---- auto-growing page bounds: grow to fit content, never shrink ----
             var pageHeight = PAGE_HEIGHT
+            // squared paper (tldraw only renders the Grid slot in grid mode)
+            editor.updateInstanceState(js("({ isGridMode: true })"))
 
             fun growBoundsToContent() {
                 val bounds = runCatching { editor.getCurrentPageBounds() }.getOrNull() ?: return
                 val needed = bounds.y + bounds.h + PAGE_GROW_MARGIN
                 if (needed > pageHeight) {
                     pageHeight = needed
+                    canvasPageHeight = needed
                     Console.warn("document page grew to height $needed")
                     runCatching { editor.setCameraOptions(documentCameraOptions(pageHeight)) }
                 }

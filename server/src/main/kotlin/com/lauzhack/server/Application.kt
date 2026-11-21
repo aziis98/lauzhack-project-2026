@@ -2,6 +2,7 @@ package com.lauzhack.server
 
 import com.lauzhack.server.ai.AiModels
 import com.lauzhack.server.chunking.ChunkService
+import com.lauzhack.server.db.getDocument
 import com.lauzhack.server.db.initDatabase
 import com.lauzhack.server.hint.HintService
 import com.lauzhack.server.hint.KoogHintAgent
@@ -46,6 +47,7 @@ fun Application.module() {
         generator = ai.hintModel?.let { KoogHintAgent(ai.executor, it) },
         scope = this,
         pageTranscription = ocr::snapshot,
+        exercise = { id -> getDocument(id)?.exercise.orEmpty() },
     )
     hints.start(ocr.events)
 

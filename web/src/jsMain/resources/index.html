@@ -215,8 +215,12 @@
 		}
 
 		.tool {
-			padding: 8px;
-			border-radius: 9px;
+			/* 44px touch targets for tablet use */
+			min-width: 44px;
+			min-height: 44px;
+			padding: 10px;
+			font-size: 20px;
+			border-radius: 10px;
 			color: var(--muted);
 			display: flex;
 			align-items: center;
@@ -236,6 +240,47 @@
 			opacity: 0.5;
 			cursor: default;
 		}
+
+		.tool-slot { display: contents; }
+		.tool-sep { width: 1px; margin: 8px 4px; background: var(--border); }
+		.swatch-dot {
+			width: 20px; height: 20px; border-radius: 50%;
+			box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+		}
+		.tool.swatch.active { background: none; box-shadow: inset 0 0 0 2px var(--accent); }
+
+		/* ------- squared paper (tldraw Grid slot, screen space) ------- */
+		.paper {
+			position: absolute;
+			z-index: 150; /* tldraw: background 100 < paper < shapes 300 */
+			background-color: #fff;
+			background-image:
+				linear-gradient(to right, rgba(37, 99, 235, 0.12) 1px, transparent 1px),
+				linear-gradient(to bottom, rgba(37, 99, 235, 0.12) 1px, transparent 1px);
+			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 40px rgba(0, 0, 0, 0.06);
+		}
+
+		/* ------- exercise statement at the top of the page (page coordinates) ------- */
+		.exercise {
+			position: absolute;
+			box-sizing: border-box;
+			padding: 16px 20px;
+			pointer-events: none; /* the student can write right next to it */
+			border-radius: 12px;
+			background: rgba(255, 255, 255, 0.92);
+			border: 1px solid var(--border);
+			color: var(--text);
+			font-size: 17px;
+			line-height: 1.55;
+		}
+		.exercise-label {
+			font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+			text-transform: uppercase; color: var(--accent); margin-bottom: 6px;
+		}
+		.exercise-body p { margin: 0 0 8px; }
+		.exercise-body ol, .exercise-body ul { margin: 4px 0 0; padding-left: 22px; }
+		.exercise-body li { margin: 3px 0; }
+		.exercise-body .katex-display { margin: 10px 0; }
 
 		/* ------- hint cards (answers to a circled "?", in page coordinates) ------- */
 		.hint-card {
@@ -359,6 +404,105 @@
 			opacity: 0 !important;
 			pointer-events: none !important;
 		}
+
+		/* =====================================================================
+		   Neobrutalist theme: pastel fills, thin dark borders, hard offset shadows.
+		   Kept last so it overrides the base layout styles above.
+		   ===================================================================== */
+		:root {
+			--ink: #1a1a1a;
+			--text: var(--ink);
+			--muted: #555;
+			--line: 1.5px solid var(--ink);
+			--hard: 3px 3px 0 var(--ink);
+			--hard-sm: 2px 2px 0 var(--ink);
+			--radius: 10px;
+			--border: var(--ink);
+			--shadow: var(--hard);
+
+			--cream: #fff8ec;
+			--yellow: #ffe58f;
+			--pink: #ffc8dd;
+			--blue: #b8e0ff;
+			--mint: #c4f1d4;
+			--lilac: #dcd0ff;
+			--peach: #ffd6a5;
+
+			--accent: var(--ink);
+			--accent-soft: var(--yellow);
+		}
+
+		body { background: var(--cream); }
+
+		.card, .topbar, .tool-dock, .back-fab, .zoom-btn, .hint-card, .exercise, input {
+			border: var(--line);
+			box-shadow: var(--hard);
+			border-radius: var(--radius);
+			backdrop-filter: none;
+		}
+		.topbar, .tool-dock { background: #fff; }
+		.topbar .title { font-weight: 800; }
+
+		/* buttons: pastel fill, press-down on click */
+		.page > .card button:not(.tool):not(.ghost):not(.doc-row),
+		.back-fab, .zoom-btn {
+			background: var(--pink);
+			color: var(--ink);
+			border: var(--line);
+			box-shadow: var(--hard-sm);
+			transition: transform 80ms, box-shadow 80ms;
+		}
+		.page > .card button:not(.tool):not(.ghost):not(.doc-row):hover,
+		.back-fab:hover, .zoom-btn:hover { background: var(--peach); color: var(--ink); }
+		.page > .card button:not(.tool):not(.ghost):not(.doc-row):active,
+		.back-fab:active, .zoom-btn:active, .tool:active:not(:disabled) {
+			transform: translate(2px, 2px);
+			box-shadow: none;
+		}
+		.back-fab, .zoom-btn { border-radius: 10px; background: var(--blue); }
+
+		input { background: #fff; box-shadow: var(--hard-sm); }
+		input:focus { background: var(--yellow); }
+
+		.doc-row:hover { background: var(--mint); }
+		.docs li + li { border-top: var(--line); }
+
+		/* tool pill */
+		.tool { color: var(--ink); border: 1.5px solid transparent; }
+		.tool:hover:not(:disabled) { background: var(--cream); }
+		.tool.active { background: var(--yellow); color: var(--ink); border: var(--line); }
+		.tool.swatch.active { background: #fff; box-shadow: none; border: var(--line); }
+		.swatch-dot { border: var(--line); box-shadow: none; }
+		.tool-sep { background: var(--ink); }
+
+		/* page sheet */
+		.paper {
+			border: var(--line);
+			box-shadow: 6px 6px 0 var(--ink);
+			background-image:
+				linear-gradient(to right, rgba(68, 101, 233, 0.16) 1px, transparent 1px),
+				linear-gradient(to bottom, rgba(68, 101, 233, 0.16) 1px, transparent 1px);
+		}
+		.tl-background { background: var(--cream) !important; }
+
+		/* exercise statement */
+		.exercise { background: var(--blue); }
+		.exercise-label {
+			display: inline-block;
+			padding: 2px 8px;
+			background: #fff;
+			color: var(--ink);
+			border: var(--line);
+			border-radius: 6px;
+		}
+
+		/* AI hint cards */
+		.hint-card { background: var(--yellow); border-color: var(--ink); }
+		.hint-card.hint-failed { background: var(--pink); border-color: var(--ink); }
+		.hint-head .ph, .hint-failed .hint-head .ph, .hint-dots { color: var(--ink); }
+		.hint-steps { color: var(--ink); }
+		.hint-close { border: 1.5px solid transparent; }
+		.hint-close:hover { background: #fff; border: var(--line); }
 	</style>
 </head>
 <body>
