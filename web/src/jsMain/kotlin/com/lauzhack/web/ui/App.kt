@@ -126,6 +126,9 @@ val App = FC<Props> {
             // minimal floating tool pill
             Toolbar { editor = activeEditor }
 
+            // zoom buttons, bottom-left
+            ZoomControls { editor = activeEditor }
+
             ReactHTML.div {
                 className = ClassName("canvas-fill")
                 Canvas {

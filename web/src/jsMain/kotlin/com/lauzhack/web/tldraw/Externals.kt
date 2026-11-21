@@ -27,6 +27,9 @@ external interface Editor {
     fun deleteShapes(ids: Array<String>)
     fun getShape(id: String): TlRecord?
     fun setCurrentTool(id: String)
+    fun zoomIn()
+    fun zoomOut()
+    fun resetZoom()
 }
 
 /** A tldraw store record (shapes, pages, bindings, ...). */
