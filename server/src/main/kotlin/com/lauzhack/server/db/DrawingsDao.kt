@@ -50,8 +50,9 @@ fun getDocument(id: String): Document? = transaction {
 }
 
 /**
- * Resolves a document by full id (`doc:<uuid>`) or by its short form:
- * the first 16 hex chars of the uuid, used in the `/doc/{hex}` URL path.
+ * Resolves a document by full id (`doc:<uuid>`), by its short form (the first
+ * 16 hex chars of a uuid, used in the `/doc/{hex}` URL path), or by a full
+ * non-uuid id written without its `doc:` prefix (e.g. seeded exercises).
  */
 fun resolveDocument(idOrShort: String): Document? = transaction {
     when {
@@ -67,7 +68,7 @@ fun resolveDocument(idOrShort: String): Document? = transaction {
                 ?.toDocument()
         }
 
-        else -> null
+        else -> getDocument("doc:$idOrShort")
     }
 }
 

@@ -24,19 +24,29 @@ external object Window {
 }
 
 /** Matches a 16-char lowercase hex short id. */
-private val shortIdRegex = Regex("^[0-9a-f]{16}$")
+private val shortIdHex = Regex("^[0-9a-f]{16}$")
 
-/** `/doc/{first 16 hex chars of the document's uuid}` */
-fun docPath(docId: String): String {
-    val hex = docId.removePrefix("doc:").replace("-", "").take(16)
-    return "/doc/$hex"
+/** Matches a plausible id segment in a /doc/... path (hex short ids and full non-uuid ids). */
+private val pathIdSegment = Regex("^[a-zA-Z0-9-]{4,64}$")
+
+/** The URL path segment for a document: 16-hex short form for uuids, otherwise the full id. */
+private fun pathSegment(docId: String): String {
+    val hex = docId.removePrefix("doc:").replace("-", "")
+    return if (hex.length >= 16 && hex.substring(0, 16).matches(shortIdHex)) {
+        hex.substring(0, 16)
+    } else {
+        docId.removePrefix("doc:")
+    }
 }
 
-/** The short id encoded in a `/doc/...` path, or null. */
+/** `/doc/{path segment}` */
+fun docPath(docId: String): String = "/doc/" + pathSegment(docId)
+
+/** The id encoded in a `/doc/...` path, or null. */
 fun shortIdFromPath(path: String): String? {
     if (!path.startsWith("/doc/")) return null
     val short = path.removePrefix("/doc/").substringBefore('/')
-    return if (short.matches(shortIdRegex)) short else null
+    return if (short.matches(pathIdSegment)) short else null
 }
 
 /** Sync the app to the browser's back/forward navigation (passes the raw path). */

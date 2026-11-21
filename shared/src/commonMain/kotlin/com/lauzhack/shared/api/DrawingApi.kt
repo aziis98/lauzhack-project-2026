@@ -45,9 +45,6 @@ class DrawingApi(
             setBody(CreateDocumentRequest(name))
         }.body()
 
-    suspend fun getDocument(documentId: String): Document =
-        client.get("$api/documents/$documentId").body()
-
     suspend fun getElements(documentId: String): List<Element> =
         client.get("$api/documents/$documentId/elements").body()
 

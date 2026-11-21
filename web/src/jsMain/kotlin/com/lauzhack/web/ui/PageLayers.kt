@@ -47,7 +47,7 @@ private val ExerciseStatement = FC<Props> {
 
     useEffectOnce {
         val documentId = canvasDocumentId ?: return@useEffectOnce
-        val exercise = runCatching { pageApi.getDocument(documentId).exercise }.getOrNull()
+        val exercise = runCatching { pageApi.getDocument(documentId)?.exercise }.getOrNull()
         if (!exercise.isNullOrBlank()) html = renderMathMarkdown(exercise)
     }
 
