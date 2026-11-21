@@ -29,6 +29,10 @@ kotlin {
             implementation(npm("react", "19.3.1"))
             implementation(npm("react-dom", "19.3.1"))
             implementation(npm("tldraw", "5.6.2"))
+            // typography + icon fonts
+            implementation(npm("@fontsource/open-sans", "5.3.0"))
+            implementation(npm("@fontsource/jetbrains-mono", "5.3.0"))
+            implementation(npm("@phosphor-icons/web", "2.1.2"))
             // loaders used by the webpack css pipeline
             implementation(devNpm("css-loader", "7.1.5"))
             implementation(devNpm("style-loader", "4.0.0"))

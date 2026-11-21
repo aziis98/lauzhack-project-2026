@@ -98,7 +98,7 @@ val App = FC<Props> {
                                     onClick = { _ -> selected = doc.id }
                                     ReactHTML.span { +doc.name }
                                     ReactHTML.span {
-                                        className = ClassName("muted")
+                                        className = ClassName("muted mono")
                                         +formatTime(doc.updatedAt)
                                     }
                                 }
@@ -116,11 +116,12 @@ val App = FC<Props> {
             // the only chrome: a minimal floating back button
             ReactHTML.button {
                 className = ClassName("back-fab")
-                +"←"
+                title = "All drawings"
                 onClick = { _ ->
                     selected = null
                     activeEditor = null
                 }
+                ReactHTML.span { className = ClassName("ph"); +"ph-arrow-left" }
             }
 
             // minimal floating tool pill

@@ -95,4 +95,5 @@ Elements are polymorphic via the `kind` discriminator:
 
 - Kotlin 2.4.21, Ktor 3.6.1, Exposed 1.6.1, SQLite via `sqlite-jdbc`
 - kotlin-wrappers (React 19), tldraw 5.6.2
+- Typography & icons: Open Sans + JetBrains Mono (Fontsource), Phosphor Regular webfont
 - Server scaffolded with the official `ktor` CLI, adapted to a multi-module build

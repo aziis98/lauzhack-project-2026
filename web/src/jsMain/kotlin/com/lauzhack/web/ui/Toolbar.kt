@@ -12,17 +12,17 @@ external interface ToolbarProps : Props {
     var editor: Editor?
 }
 
-private data class Tool(val label: String, val id: String)
+private data class Tool(val label: String, val id: String, val icon: String)
 
 /** Minimal tool pill; drives tldraw's editor directly. */
 private val tools = listOf(
-    Tool("Select", "select"),
-    Tool("Draw", "draw"),
-    Tool("Eraser", "eraser"),
-    Tool("Shape", "geo"),
-    Tool("Arrow", "arrow"),
-    Tool("Text", "text"),
-    Tool("Note", "note"),
+    Tool("Select", "select", "ph-cursor"),
+    Tool("Draw", "draw", "ph-pencil"),
+    Tool("Eraser", "eraser", "ph-eraser"),
+    Tool("Shape", "geo", "ph-square"),
+    Tool("Arrow", "arrow", "ph-arrow-bend-up-right"),
+    Tool("Text", "text", "ph-text-aa"),
+    Tool("Note", "note", "ph-note"),
 )
 
 val Toolbar = FC<ToolbarProps> { props ->
@@ -35,13 +35,17 @@ val Toolbar = FC<ToolbarProps> { props ->
                 className = ClassName(if (tool.id == active) "tool active" else "tool")
                 key = Key(tool.id)
                 disabled = (props.editor == null)
-                +tool.label
+                title = tool.label
                 onClick = { _ ->
                     val ed = props.editor
                     if (ed != null) {
                         ed.setCurrentTool(tool.id)
                         active = tool.id
                     }
+                }
+                ReactHTML.span {
+                    className = ClassName("ph")
+                    +tool.icon
                 }
             }
         }
