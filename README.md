@@ -11,10 +11,11 @@ A cross-platform drawing app backend + web frontend, built with Kotlin.
   [tldraw](https://tldraw.dev) infinite canvas, wired to the backend through a
   thin adapter layer
 
-The UI is a vertical scrolling document: a sticky top bar with a minimal
-tool selector and autosave indicator, the canvas as a large soft-shadowed
-card, and tldraw's own chrome (minimap, zoom controls, menus, default
-toolbar) hidden — the app drives the editor directly.
+The UI is chrome-free: the canvas fills the whole page, with only a floating
+back button on top. tldraw's own UI (minimap, zoom controls, menus, default
+toolbar, pages) is hidden — pick tools via keyboard shortcuts (V, D, E, R,
+A, T) and colors from the contextual style panel. Autosave runs silently
+in the background.
 
 The database stores **generic drawing data** (strokes, geometry, text, arrows
 with style/color info) — tldraw is just the web-facing editor. Android and iOS

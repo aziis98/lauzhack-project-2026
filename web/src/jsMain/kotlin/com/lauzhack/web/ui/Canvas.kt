@@ -21,8 +21,6 @@ private val json = Json
 
 external interface CanvasProps : Props {
     var documentId: String
-    var onReady: ((Editor) -> Unit)?
-    var onSaved: (() -> Unit)?
 }
 
 /** Hides tldraw's default chrome; we provide our own minimal toolbar. */
@@ -49,8 +47,6 @@ val Canvas = FC<CanvasProps> { props ->
         components = hiddenComponents()
         options = singlePageOptions()
         onMount = { editor ->
-            props.onReady?.invoke(editor)
-
             CoroutineScope(Dispatchers.Default).launch {
                 // LOAD: fetch the document's elements and push them into the editor.
                 // If anything fails we bail out WITHOUT starting the autosave loop,
@@ -92,7 +88,6 @@ val Canvas = FC<CanvasProps> { props ->
                         if (payload != lastPayload) {
                             if (api.replaceElements(props.documentId, current)) {
                                 lastPayload = payload
-                                props.onSaved?.invoke()
                             }
                         }
                     }

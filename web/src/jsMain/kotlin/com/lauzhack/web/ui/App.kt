@@ -2,7 +2,6 @@ package com.lauzhack.web.ui
 
 import com.lauzhack.shared.api.DrawingApi
 import com.lauzhack.shared.domain.Document
-import com.lauzhack.web.tldraw.Editor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,17 +27,10 @@ private fun formatTime(ms: Long): String {
     return date.toLocaleString().toString()
 }
 
-private fun nowTime(): String {
-    val date: dynamic = js("new Date()")
-    return date.toLocaleTimeString().toString()
-}
-
 val App = FC<Props> {
     var documents by useState<List<Document>?>(null)
     var selected by useState(initialDocId())
     var newName by useState("")
-    var activeEditor by useState<Editor?>(null)
-    var savedAt by useState<String?>(null)
 
     fun refresh() {
         scope.launch { documents = api.listDocuments() }
@@ -115,28 +107,21 @@ val App = FC<Props> {
             }
         }
     } else {
-        // ---------------- drawing: full-page canvas with floating toolbar ----------------
+        // ---------------- drawing: chrome-free full-page canvas ----------------
         ReactHTML.div {
             className = ClassName("fullscreen-page")
 
-            TopBar {
-                title = documents?.find { it.id == openId }?.name ?: "Drawing"
-                subtitle = savedAt?.let { "Saved $it" } ?: "Not saved yet"
-                editor = activeEditor
-                showTools = true
-                onBack = {
-                    selected = null
-                    activeEditor = null
-                    savedAt = null
-                }
+            // the only chrome: a minimal floating back button
+            ReactHTML.button {
+                className = ClassName("back-fab")
+                +"←"
+                onClick = { _ -> selected = null }
             }
 
             ReactHTML.div {
                 className = ClassName("canvas-fill")
                 Canvas {
                     documentId = openId
-                    onReady = { activeEditor = it }
-                    onSaved = { savedAt = nowTime() }
                 }
             }
         }

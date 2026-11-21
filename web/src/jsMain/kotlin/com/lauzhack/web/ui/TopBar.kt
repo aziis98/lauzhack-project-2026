@@ -1,6 +1,5 @@
 package com.lauzhack.web.ui
 
-import com.lauzhack.web.tldraw.Editor
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML
@@ -9,12 +8,10 @@ import web.cssom.ClassName
 external interface TopBarProps : Props {
     var title: String
     var subtitle: String?
-    var editor: Editor?
-    var showTools: Boolean
     var onBack: (() -> Unit)?
 }
 
-/** Three-column grid: title left, tools centered, status right. */
+/** App header used on the home page: title left, status right. */
 val TopBar = FC<TopBarProps> { props ->
     ReactHTML.header {
         className = ClassName("topbar")
@@ -31,13 +28,6 @@ val TopBar = FC<TopBarProps> { props ->
             ReactHTML.div {
                 className = ClassName("title")
                 +props.title
-            }
-        }
-
-        if (props.showTools) {
-            ReactHTML.div {
-                className = ClassName("tb-center")
-                Toolbar { editor = props.editor }
             }
         }
 
