@@ -63,7 +63,7 @@ private suspend fun awaitUntil(timeoutMs: Long = 5000, condition: suspend () -> 
 class OcrServiceTest {
     private val scope = CoroutineScope(SupervisorJob())
     private val calls = AtomicInteger()
-    private val recognizer = ChunkRecognizer { calls.incrementAndGet(); ChunkTranscription(ChunkKind.MATH, "x=1") }
+    private val recognizer = ChunkRecognizer { _, _ -> calls.incrementAndGet(); ChunkTranscription(ChunkKind.MATH, "x=1") }
     private val tracker = ChunkTracker()
 
     @AfterTest
@@ -144,7 +144,7 @@ class OcrServiceTest {
 
     @Test
     fun failuresAreLoggedAndLeaveTheChunkPending() = runBlocking {
-        val ocr = service(rec = { error("model down") })
+        val ocr = service(rec = { _, _ -> error("model down") })
         ocr.handle(event(stroke("a", 0.0, 0.0)))
         delay(300) // the recognizer throws right after the debounce
         assertNull(ocr.snapshot("doc").single().transcription)

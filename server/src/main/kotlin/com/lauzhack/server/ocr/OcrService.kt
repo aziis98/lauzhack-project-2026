@@ -52,6 +52,8 @@ class OcrService(
     private val recognizer: ChunkRecognizer?,
     private val scope: CoroutineScope,
     private val rasterizer: ChunkRasterizer = ChunkRasterizer(),
+    /** Segments the chunk image into symbol fragments injected into the OCR prompt. */
+    private val annotator: SymbolAnnotator = SymbolAnnotator(),
     private val debounceMillis: Long = 1000,
     maxConcurrent: Int = 4,
     cacheSize: Int = 5000,
@@ -122,7 +124,11 @@ class OcrService(
         try {
             delay(debounceMillis)
             val png = withContext(Dispatchers.Default) { rasterizer.render(chunk.bounds, strokes) }
-            val result = permits.withPermit { recognizer.recognize(png) }
+            val result = permits.withPermit {
+                // pre-segmentation: symbol fragment coordinates ground the model's bboxes
+                val fragments = withContext(Dispatchers.Default) { annotator.annotate(png) }
+                recognizer.recognize(png, fragments)
+            }
             synchronized(cache) { cache[chunk.contentHash] = result }
             log.info("doc {} {} v{}: {} {}", docId, chunk.id, chunk.version, result.kind, result.content)
 

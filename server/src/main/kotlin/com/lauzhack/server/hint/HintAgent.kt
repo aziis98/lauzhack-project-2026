@@ -7,6 +7,7 @@ import ai.koog.prompt.llm.LLModel
 import com.lauzhack.shared.hint.HintCard
 import com.lauzhack.shared.ocr.ChunkKind
 import com.lauzhack.shared.ocr.TranscribedChunk
+import com.lauzhack.shared.ocr.stripBboxes
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.serializer
 import kotlin.math.roundToInt
@@ -81,7 +82,7 @@ class KoogHintAgent(
                     t == null -> append("(not transcribed yet)")
                     t.kind == ChunkKind.HINT_REQUEST -> append("(older circled ?)")
                     t.content.isBlank() -> append(t.kind.name)
-                    else -> append(t.kind.name).append(": ").append(t.content)
+                    else -> append(t.kind.name).append(": ").append(t.content.stripBboxes())
                 }
                 appendLine()
             }

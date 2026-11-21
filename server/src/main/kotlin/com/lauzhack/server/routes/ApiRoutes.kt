@@ -4,6 +4,8 @@ import com.lauzhack.server.chunking.ChunkService
 import com.lauzhack.server.hint.HintService
 import com.lauzhack.server.ocr.ChunkRasterizer
 import com.lauzhack.server.ocr.OcrService
+import com.lauzhack.server.ocr.SymbolAnnotator
+import com.lauzhack.shared.chunking.Chunk
 import io.ktor.http.ContentType
 import io.ktor.server.response.respondBytes
 import com.lauzhack.shared.ocr.TranscribedChunk
@@ -78,14 +80,27 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService) {
             // The exact image the OCR model receives for one chunk; debug/inspection.
             get("chunks/{cid}/image.png") {
                 val id = call.parameters["id"]!!
-                val chunk = ChunkService.snapshot(id).find { it.id == call.parameters["cid"] }
-                if (chunk == null) {
-                    call.respond(HttpStatusCode.NotFound)
-                } else {
-                    val ids = chunk.strokeIds.toSet()
-                    val png = ChunkRasterizer().render(chunk.bounds, listElements(id).filter { it.id in ids })
-                    call.respondBytes(png, ContentType.Image.PNG)
-                }
+                val chunk = chunkOf(id, call.parameters["cid"])
+                    ?: return@get call.respond(HttpStatusCode.NotFound)
+                call.respondBytes(chunkPng(id, chunk), ContentType.Image.PNG)
+            }
+
+            // Symbol fragments detected by pre-OCR segmentation; debug/inspection.
+            get("chunks/{cid}/symbols") {
+                val id = call.parameters["id"]!!
+                val chunk = chunkOf(id, call.parameters["cid"])
+                    ?: return@get call.respond(HttpStatusCode.NotFound)
+                call.respond(SymbolAnnotator().annotate(chunkPng(id, chunk)))
+            }
+
+            // The chunk image with the segmentation painted over the ink; debug/inspection.
+            get("chunks/{cid}/annotated.png") {
+                val id = call.parameters["id"]!!
+                val chunk = chunkOf(id, call.parameters["cid"])
+                    ?: return@get call.respond(HttpStatusCode.NotFound)
+                val png = chunkPng(id, chunk)
+                val annotator = SymbolAnnotator()
+                call.respondBytes(annotator.renderAnnotated(png, annotator.annotate(png)), ContentType.Image.PNG)
             }
 
             // Chunks with their OCR result (null = pending); debug/inspection.
@@ -186,4 +201,14 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService) {
             }
         }
     }
+}
+
+/** The chunk with id [cid] of document [documentId], or null. */
+private suspend fun chunkOf(documentId: String, cid: String?): Chunk? =
+    cid?.let { wanted -> ChunkService.snapshot(documentId).find { it.id == wanted } }
+
+/** Rasterizes one chunk exactly as the OCR pipeline would render it. */
+private suspend fun chunkPng(documentId: String, chunk: Chunk): ByteArray {
+    val ids = chunk.strokeIds.toSet()
+    return ChunkRasterizer().render(chunk.bounds, listElements(documentId).filter { it.id in ids })
 }

@@ -20,6 +20,7 @@ dependencies {
     implementation("org.jetbrains.exposed:exposed-jdbc:1.6.1")
     implementation("org.xerial:sqlite-jdbc:3.54.1.0")
     implementation("ch.qos.logback:logback-classic:1.6.3")
+    implementation("org.boofcv:boofcv-core:1.6.0")
 
     // AI agents (OCR + reasoning) — https://github.com/JetBrains/koog
     implementation("ai.koog:koog-agents:1.3.0")
