@@ -14,6 +14,8 @@ import com.lauzhack.shared.agent.PlotPoint
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.serializer
 import org.slf4j.LoggerFactory
 
@@ -166,7 +168,7 @@ class KoogPageAgent(
     private val executor: PromptExecutor,
     private val model: LLModel,
     private val json: Json,
-    private val reasoningEffort: ReasoningEffort = ReasoningEffort.MEDIUM,
+    private val reasoningEffort: ReasoningEffort = ReasoningEffort.HIGH,
 ) : PageAgent {
 
     private val log = LoggerFactory.getLogger(KoogPageAgent::class.java)
@@ -178,7 +180,17 @@ class KoogPageAgent(
                 if (m.role == "user") user(m.content) else assistant(m.content)
             }
             user(userMessage)
-        }.withParams(OpenAIChatParams(reasoningEffort = reasoningEffort))
+        }.withParams(
+            OpenAIChatParams(
+                // DeepSeek V4.1 Flash is hybrid thinking-by-default: reasoning stays ON for the tutor.
+                // Effort note: Together accepts only "high"/"max" for DeepSeek V4 and maps
+                // "medium"→"high", so HIGH is the effective medium tier for this model.
+                reasoningEffort = reasoningEffort,
+                additionalProperties = mapOf(
+                    "reasoning" to buildJsonObject { put("enabled", true) },
+                ),
+            ),
+        )
 
         if (!loggedSystemPrompt) {
             loggedSystemPrompt = true

@@ -51,10 +51,10 @@ fun Application.module() {
     )
     if (ai.ocrModel == null) environment.log.warn("TOGETHER_API_KEY not set: OCR, hints and plots disabled")
 
-    val ocrEffort = ReasoningEffort.valueOf(setting("ai.ocrReasoningEffort")?.uppercase() ?: "NONE")
-    val agentEffort = ReasoningEffort.valueOf(setting("ai.agentReasoningEffort")?.uppercase() ?: "MEDIUM")
+    val ocrReasoningEnabled = setting("ai.ocrReasoningEnabled")?.toBooleanStrict() ?: false
+    val agentEffort = ReasoningEffort.valueOf(setting("ai.agentReasoningEffort")?.uppercase() ?: "HIGH")
     val ocr = OcrService(
-        recognizer = ai.ocrModel?.let { KoogChunkRecognizer(ai.executor, it, reasoningEffort = ocrEffort) },
+        recognizer = ai.ocrModel?.let { KoogChunkRecognizer(ai.executor, it, reasoningEnabled = ocrReasoningEnabled) },
         scope = this,
     )
     ocr.start(ChunkService.events)

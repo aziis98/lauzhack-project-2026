@@ -329,11 +329,12 @@ export TOGETHER_API_KEY=...      # OCR + hints + the page agent
 ./gradlew :server:run
 ```
 
-Thinking levels are configurable per role (`reasoning_effort`, Together AI
-OpenAI-compatible API): OCR defaults to **none** (vision transcription, latency
-matters), the page agent to **medium** (the tutor reasons about actions).
-Override with `OCR_REASONING_EFFORT` / `AGENT_REASONING_EFFORT`
-(`none|minimal|low|medium|high`).
+Thinking control is Together-specific (DeepSeek V4.1 Flash is hybrid thinking-by-default):
+the OCR call sends `reasoning: {"enabled": false}` — the documented toggle; `reasoning_effort`
+is deliberately not used for OCR because DeepSeek V4 only accepts `high`/`max` (Together maps
+`low`/`medium`/`none` to `high`). The page agent keeps reasoning ON at effort `high` (the
+effective medium tier for this model). Override with `OCR_REASONING_ENABLED` /
+`AGENT_REASONING_EFFORT`.
 
 ```
 GET    /api/documents/{id}/transcription               [{ chunk, transcription | null }]   (debug)

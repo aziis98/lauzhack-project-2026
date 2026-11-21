@@ -2,7 +2,6 @@ package com.lauzhack.server.ocr
 
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
-import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.executor.model.executeStructured
 import ai.koog.prompt.llm.LLModel
@@ -12,6 +11,8 @@ import com.lauzhack.shared.ocr.ChunkKind
 import com.lauzhack.shared.ocr.ChunkTranscription
 import com.lauzhack.shared.ocr.SymbolFragment
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.serializer
 
 /** Turns the image of one chunk into a [ChunkTranscription]. */
@@ -73,11 +74,19 @@ internal val OCR_SYSTEM_PROMPT = """
     guess content that is not there. A wrong calculation must stay wrong in the transcription.
 """.trimIndent()
 
-/** [ChunkRecognizer] backed by a light vision model through Koog, with structured (JSON) output. */
+/**
+ * [ChunkRecognizer] backed by a light vision model through Koog, with structured (JSON) output.
+ *
+ * @param reasoningEnabled DeepSeek V4.1 Flash is a hybrid thinking-by-default model on Together;
+ *   `reasoning={"enabled": false}` (Together-specific, passed via additionalProperties) is the
+ *   documented way to skip the chain of thought. `reasoning_effort` is NOT used here: for
+ *   DeepSeek V4 it only accepts "high"/"max", and Together maps everything else to "high" —
+ *   so a low effort value would still think at full depth.
+ */
 class KoogChunkRecognizer(
     private val executor: PromptExecutor,
     private val model: LLModel,
-    private val reasoningEffort: ReasoningEffort = ReasoningEffort.NONE,
+    private val reasoningEnabled: Boolean = false,
 ) : ChunkRecognizer {
 
     private val log = org.slf4j.LoggerFactory.getLogger(KoogChunkRecognizer::class.java)
@@ -93,14 +102,21 @@ class KoogChunkRecognizer(
                 text(buildOcrUserText(fragments))
                 image(AttachmentSource.Image(content = AttachmentContent.Binary.Bytes(png), format = "png"))
             }
-        }.withParams(OpenAIChatParams(reasoningEffort = reasoningEffort))
+        }.withParams(
+            OpenAIChatParams(
+                additionalProperties = mapOf(
+                    // Together-specific reasoning toggle; see the class doc
+                    "reasoning" to buildJsonObject { put("enabled", reasoningEnabled) },
+                ),
+            ),
+        )
         val start = System.nanoTime()
         val output = executor.executeStructured(request, model, serializer<OcrOutput>(), examples = EXAMPLES)
             .getOrThrow().data
         log.info(
-            "ocr-model-timing: model={}ms reasoning_effort={} model_id={} fragments={}",
+            "ocr-model-timing: model={}ms reasoning_enabled={} model_id={} fragments={}",
             (System.nanoTime() - start) / 1_000_000,
-            reasoningEffort,
+            reasoningEnabled,
             model.id,
             fragments.size,
         )

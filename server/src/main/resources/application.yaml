@@ -15,7 +15,11 @@ ai:
   # The page agent (actions list: hint / plot). No true "medium" tier is available
   # serverless on Together: Flash is the fast default, V4-Pro-0813 the heavy option.
   agentModel: "$AGENT_MODEL:deepseek-ai/DeepSeek-V4.1-Flash"
-  # Thinking levels (Together/OpenAI reasoning_effort): OCR = none (vision transcription,
-  # latency matters), agent = medium (the tutor reasons about actions).
-  ocrReasoningEffort: "$OCR_REASONING_EFFORT:none"
-  agentReasoningEffort: "$AGENT_REASONING_EFFORT:medium"
+  # Thinking control (Together AI, DeepSeek V4.1 Flash is hybrid thinking-by-default):
+  # - OCR: reasoning={"enabled": false} — the Together-specific toggle; reasoning_effort is NOT
+  #   used because DeepSeek V4 accepts only high/max (low/medium/none get mapped to "high").
+  #   Set ocrReasoningEnabled=true to have the OCR model think (slower, rarely needed).
+  ocrReasoningEnabled: "$OCR_REASONING_ENABLED:false"
+  # - Agent: reasoning stays ON (the tutor reasons); effort HIGH is the effective medium
+  #   tier for DeepSeek V4 (Together maps medium→high, max is the heavy option).
+  agentReasoningEffort: "$AGENT_REASONING_EFFORT:high"
