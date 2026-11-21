@@ -1,0 +1,497 @@
+/* Lauzhack Draw — app styles */
+
+:root {
+	--card: #ffffff;
+	--text: #18181b;
+	--muted: #71717a;
+	--accent: #2563eb;
+	--accent-soft: #eef2ff;
+	--border: #e4e4e7;
+	--radius: 16px;
+	--shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.07);
+	--shadow-lift: 0 4px 10px rgba(0, 0, 0, 0.06), 0 16px 40px rgba(0, 0, 0, 0.13);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+}
+
+body {
+	font-family: "Open Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+	color: var(--text);
+	background: radial-gradient(1100px 700px at 50% -10%, #eef2ff 0%, #f6f7f9 45%, #f3f4f6 100%);
+	background-attachment: fixed;
+}
+
+#root {
+	min-height: 100vh;
+}
+
+.mono {
+	font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+.muted {
+	color: var(--muted);
+	font-size: 14px;
+}
+
+/* phosphor icon glyphs */
+.ph {
+	font-size: 16px;
+	line-height: 1;
+}
+
+button {
+	font: inherit;
+	cursor: pointer;
+	border: none;
+	background: none;
+	color: inherit;
+}
+
+input {
+	font: inherit;
+	padding: 9px 13px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: #fafafa;
+	outline: none;
+	min-width: 0;
+}
+
+input:focus {
+	border-color: var(--accent);
+	background: #fff;
+	box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+/* ------- top bar ------- */
+.topbar {
+	position: sticky;
+	top: 14px;
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin: 14px 0 22px;
+	padding: 10px 16px;
+	background: rgba(255, 255, 255, 0.9);
+	backdrop-filter: blur(10px);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+}
+
+.tb-left {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.tb-right {
+	color: var(--muted);
+	font-size: 12.5px;
+	white-space: nowrap;
+}
+
+.topbar .title {
+	font-weight: 700;
+	font-size: 15px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 24vw;
+}
+
+/* ------- dashboard layout ------- */
+.dash {
+	display: flex;
+	gap: 20px;
+	align-items: flex-start;
+	max-width: 1180px;
+	margin: 0 auto;
+	padding: 0 20px 64px;
+}
+
+.dash-main {
+	flex: 1;
+	min-width: 0;
+}
+
+@media (max-width: 840px) {
+	.dash {
+		flex-direction: column;
+	}
+
+	.sidebar-card {
+		position: static !important;
+		width: 100% !important;
+		margin-top: 14px;
+	}
+}
+
+/* ------- subject sidebar ------- */
+.sidebar-card {
+	position: sticky;
+	top: 14px;
+	margin-top: 14px;
+	width: 236px;
+	flex: 0 0 236px;
+	background: var(--card);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	padding: 14px 10px;
+}
+
+.subjects {
+	display: grid;
+	gap: 2px;
+}
+
+.subject-label {
+	font-size: 11.5px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted);
+	padding: 4px 10px 10px;
+}
+
+.subject {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px 10px;
+	border-radius: 10px;
+	font-size: 14px;
+	text-align: left;
+}
+
+.subject:hover {
+	background: #f4f4f5;
+}
+
+.subject.active {
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.subject .caret {
+	margin-right: -2px;
+	font-size: 12px;
+	color: var(--muted);
+	transition: transform 0.15s;
+}
+
+.subject .caret.open {
+	transform: rotate(90deg);
+}
+
+.subject .count {
+	margin-left: auto;
+	font-size: 11px;
+	color: var(--muted);
+	background: #f4f4f5;
+	border-radius: 99px;
+	padding: 1px 7px;
+}
+
+.subject.active .count {
+	background: #fff;
+	color: var(--accent);
+}
+
+.subject-children {
+	display: grid;
+	gap: 2px;
+	padding: 2px 0 6px 18px;
+}
+
+.subject-child {
+	width: 100%;
+	text-align: left;
+	padding: 6px 10px;
+	font-size: 13px;
+	color: var(--muted);
+	border-radius: 8px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.subject-child:hover {
+	color: var(--text);
+	background: #f4f4f5;
+}
+
+/* ------- worksheets header ------- */
+.ws-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 4px 0 14px;
+}
+
+.ws-header h2 {
+	margin: 0;
+	font-size: 18px;
+}
+
+.btn-primary {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 9px 16px;
+	border-radius: 10px;
+	background: var(--accent);
+	color: #fff;
+	font-weight: 600;
+	font-size: 14px;
+	box-shadow: 0 1px 2px rgba(37, 99, 235, 0.4);
+	white-space: nowrap;
+}
+
+.btn-primary:hover {
+	background: #1d4ed8;
+}
+
+.hidden-file-input {
+	display: none;
+}
+
+/* ------- worksheet grid ------- */
+.ws-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	gap: 14px;
+}
+
+.ws-card {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 18px;
+	background: var(--card);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	text-align: left;
+	border: none;
+	transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ws-card:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--shadow-lift);
+}
+
+.ws-card .ws-title {
+	font-weight: 700;
+	font-size: 15px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ws-card .ws-time {
+	font-size: 12px;
+	color: var(--muted);
+}
+
+.ws-card .ws-thumb {
+	height: 92px;
+	border-radius: 10px;
+	background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%);
+	border: 1px solid #f1f5f9;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--muted);
+}
+
+.ws-card .ws-thumb .ph {
+	font-size: 26px;
+}
+
+/* new worksheet tile */
+.ws-new {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 18px;
+	border: 2px dashed var(--border);
+	background: transparent;
+	border-radius: var(--radius);
+	color: var(--muted);
+	text-align: left;
+	transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.ws-new:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+	background: var(--accent-soft);
+}
+
+.ws-new .ph {
+	color: inherit;
+}
+
+.ws-new-input {
+	border: none;
+	background: transparent;
+	padding: 0;
+	box-shadow: none !important;
+	font-size: 15px;
+}
+
+.ws-new-input:focus {
+	border: none;
+	background: transparent;
+}
+
+.ws-empty {
+	grid-column: 1 / -1;
+	background: var(--card);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	padding: 34px 26px;
+	text-align: center;
+	color: var(--muted);
+}
+
+.ws-empty .ph {
+	font-size: 28px;
+	display: block;
+	margin-bottom: 10px;
+}
+
+/* ------- drawing view ------- */
+.fullscreen-page {
+	position: fixed;
+	inset: 0;
+}
+
+.fullscreen-page .canvas-fill {
+	position: absolute;
+	inset: 0;
+}
+
+.fullscreen-page .tl-container {
+	border-radius: 0;
+}
+
+/* minimal chrome over the canvas */
+.back-fab {
+	position: absolute;
+	top: 16px;
+	left: 16px;
+	z-index: 1000;
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	border: none;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(255, 255, 255, 0.9);
+	backdrop-filter: blur(10px);
+	box-shadow: var(--shadow);
+	color: var(--muted);
+}
+
+.back-fab:hover {
+	color: var(--accent);
+	background: #fff;
+}
+
+/* floating tool pill */
+.tool-dock {
+	position: absolute;
+	top: 16px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 1000;
+	display: flex;
+	gap: 2px;
+	padding: 3px;
+	background: rgba(255, 255, 255, 0.9);
+	backdrop-filter: blur(10px);
+	border-radius: 12px;
+	box-shadow: var(--shadow);
+	max-width: calc(100vw - 28px);
+}
+
+.tool {
+	padding: 8px;
+	border-radius: 9px;
+	color: var(--muted);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.tool:hover:not(:disabled) {
+	color: var(--text);
+}
+
+.tool.active {
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+
+.tool:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* zoom buttons (bottom-left) */
+.zoom-dock {
+	position: absolute;
+	bottom: 16px;
+	left: 16px;
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.zoom-btn {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	border: none;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(255, 255, 255, 0.9);
+	backdrop-filter: blur(10px);
+	box-shadow: var(--shadow);
+	color: var(--muted);
+}
+
+.zoom-btn:hover {
+	color: var(--accent);
+	background: #fff;
+}
+
+/* hide the tldraw watermark (see tldraw SDK license terms) */
+.tl-watermark_SEE-LICENSE,
+.tl-watermark_SEE-LICENSE * {
+	display: none !important;
+	visibility: hidden !important;
+	opacity: 0 !important;
+	pointer-events: none !important;
+}
