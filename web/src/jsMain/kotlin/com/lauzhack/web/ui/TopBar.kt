@@ -14,31 +14,35 @@ external interface TopBarProps : Props {
     var onBack: (() -> Unit)?
 }
 
+/** Three-column grid: title left, tools centered, status right. */
 val TopBar = FC<TopBarProps> { props ->
     ReactHTML.header {
         className = ClassName("topbar")
 
-        if (props.onBack != null) {
-            ReactHTML.button {
-                className = ClassName("ghost")
-                +"←"
-                onClick = { _ -> props.onBack?.invoke() }
+        ReactHTML.div {
+            className = ClassName("tb-left")
+            if (props.onBack != null) {
+                ReactHTML.button {
+                    className = ClassName("ghost")
+                    +"←"
+                    onClick = { _ -> props.onBack?.invoke() }
+                }
+            }
+            ReactHTML.div {
+                className = ClassName("title")
+                +props.title
             }
         }
 
-        ReactHTML.div {
-            className = ClassName("title")
-            +props.title
-        }
-
         if (props.showTools) {
-            Toolbar { editor = props.editor }
+            ReactHTML.div {
+                className = ClassName("tb-center")
+                Toolbar { editor = props.editor }
+            }
         }
-
-        ReactHTML.div { className = ClassName("grow") }
 
         ReactHTML.span {
-            className = ClassName("status")
+            className = ClassName("tb-right")
             +(props.subtitle ?: "")
         }
     }

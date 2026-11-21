@@ -17,6 +17,7 @@ external val Tldraw: ComponentType<TldrawProps>
 external interface TldrawProps : Props {
     var onMount: ((editor: Editor) -> Unit)?
     var components: dynamic?
+    var options: dynamic?
 }
 
 external interface Editor {

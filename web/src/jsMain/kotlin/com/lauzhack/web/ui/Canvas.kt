@@ -33,12 +33,21 @@ private fun hiddenComponents(): dynamic {
     c.MainMenu = null
     c.HelpMenu = null
     c.Toolbar = null
+    c.PageMenu = null
     return c
+}
+
+/** Each drawing is a single page: disable tldraw's multi-page UI entirely. */
+private fun singlePageOptions(): dynamic {
+    val o: dynamic = js("{}")
+    o.maxPages = 1
+    return o
 }
 
 val Canvas = FC<CanvasProps> { props ->
     Tldraw {
         components = hiddenComponents()
+        options = singlePageOptions()
         onMount = { editor ->
             props.onReady?.invoke(editor)
 
