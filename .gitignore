@@ -1,0 +1,13 @@
+.gradle/
+build/
+out/
+.kotlin/
+node_modules/
+*.log
+.idea/
+*.iml
+.DS_Store
+
+# local databases
+*.db
+*.db-journal
