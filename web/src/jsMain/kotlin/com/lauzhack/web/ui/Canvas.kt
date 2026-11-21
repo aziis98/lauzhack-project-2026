@@ -7,6 +7,7 @@ import com.lauzhack.web.tldraw.toElementOrNull
 import com.lauzhack.web.tldraw.toShapePartial
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -93,85 +94,102 @@ private const val PAGE_HEIGHT = 4800.0
 /** Extra room below the lowest content when the page auto-grows. */
 private const val PAGE_GROW_MARGIN = 800.0
 
+/**
+ * Mounts the canvas logic and returns a cleanup function for tldraw.
+ *
+ * IMPORTANT: the cleanup return value is required — tldraw pushes the result
+ * of onMount into its unmount list and calls it as a function. A Kotlin
+ * lambda ending in `launch { ... }` would return a coroutine Job at the JS
+ * level, which crashes tldraw's cleanup with "fn is not a function" and
+ * tears down the whole React tree.
+ */
+private fun onCanvasMount(editor: Editor, documentId: String): (() -> Unit)? {
+    // ---- auto-growing page bounds: grow to fit content, never shrink ----
+    var pageHeight = PAGE_HEIGHT
+
+    fun growBoundsToContent() {
+        val bounds = runCatching { editor.getCurrentPageBounds() }.getOrNull() ?: return
+        val needed = bounds.y + bounds.h + PAGE_GROW_MARGIN
+        if (needed > pageHeight) {
+            pageHeight = needed
+            Console.warn("document page grew to height $needed")
+            runCatching { editor.setCameraOptions(documentCameraOptions(pageHeight)) }
+        }
+    }
+
+    // grow as the user draws/edits (store listener filtered to user document
+    // changes — includes stroke end, but also live updates while drawing)
+    val filters: dynamic = js("{}")
+    filters.source = "user"
+    filters.scope = "document"
+    val disposeListener = editor.store.listen({ _ -> growBoundsToContent() }, filters)
+
+    val job: Job = CoroutineScope(Dispatchers.Default).launch {
+        // LOAD: fetch the document's elements and push them into the editor.
+        // If anything fails we bail out WITHOUT starting the autosave loop,
+        // so a broken load can never overwrite stored content with an empty canvas.
+        val elements = runCatching { api.getElements(documentId) }
+            .getOrElse { error ->
+                Console.error("LOAD FAILED: " + (error.message ?: error.toString()))
+                return@launch
+            }
+
+        runCatching {
+            val existing = editor.getCurrentPageShapes()
+            if (existing.isNotEmpty()) {
+                editor.deleteShapes(existing.map { it.id }.toTypedArray())
+            }
+        }
+
+        val pageId = editor.getCurrentPageId()
+        val partials = elements.mapNotNull { it.toShapePartial(pageId) }
+        // create shapes one by one so a single invalid shape
+        // doesn't prevent the others from rendering
+        for (partial in partials) {
+            val created = runCatching { editor.createShapes(arrayOf(partial)) }
+            if (created.isFailure) {
+                Console.warn("skipped shape: " + (created.exceptionOrNull()?.message ?: "unknown error"))
+            }
+        }
+        // camera placement is owned by the camera constraints
+        // (initialZoom 'fit-x-100' + origin), not zoomToFit
+        // grow the page if stored content extends below the initial height
+        growBoundsToContent()
+
+        // SAVE: batch-replace when content changed (poll every 2.5s)
+        var lastPayload: String? = null
+        while (isActive) {
+            delay(2500)
+            val result = runCatching {
+                val current = editor.getCurrentPageShapes().mapNotNull { it.toElementOrNull() }
+                val payload = json.encodeToString(current)
+                if (payload != lastPayload) {
+                    if (api.replaceElements(documentId, current)) {
+                        lastPayload = payload
+                    }
+                }
+            }
+            // editor was disposed (component unmounted) — stop the loop
+            if (result.isFailure) {
+                Console.warn("autosave loop stopped:", result.exceptionOrNull()?.message)
+                break
+            }
+        }
+    }
+
+    return {
+        disposeListener()
+        job.cancel()
+    }
+}
+
 val Canvas = FC<CanvasProps> { props ->
     Tldraw {
         components = hiddenComponents()
         options = singlePageOptions()
         onMount = { editor ->
             props.onReady?.invoke(editor)
-
-            // ---- auto-growing page bounds: grow to fit content, never shrink ----
-            var pageHeight = PAGE_HEIGHT
-
-            fun growBoundsToContent() {
-                val bounds = runCatching { editor.getCurrentPageBounds() }.getOrNull() ?: return
-                val needed = bounds.y + bounds.h + PAGE_GROW_MARGIN
-                if (needed > pageHeight) {
-                    pageHeight = needed
-                    Console.warn("document page grew to height $needed")
-                    runCatching { editor.setCameraOptions(documentCameraOptions(pageHeight)) }
-                }
-            }
-
-            // grow as the user draws/edits (store listener filtered to user document
-            // changes — includes stroke end, but also live updates while drawing)
-            val filters: dynamic = js("{}")
-            filters.source = "user"
-            filters.scope = "document"
-            editor.store.listen({ _ -> growBoundsToContent() }, filters)
-
-            CoroutineScope(Dispatchers.Default).launch {
-                // LOAD: fetch the document's elements and push them into the editor.
-                // If anything fails we bail out WITHOUT starting the autosave loop,
-                // so a broken load can never overwrite stored content with an empty canvas.
-                val elements = runCatching { api.getElements(props.documentId) }
-                    .getOrElse { error ->
-                        Console.error("LOAD FAILED: " + (error.message ?: error.toString()))
-                        return@launch
-                    }
-
-                runCatching {
-                    val existing = editor.getCurrentPageShapes()
-                    if (existing.isNotEmpty()) {
-                        editor.deleteShapes(existing.map { it.id }.toTypedArray())
-                    }
-                }
-
-                val pageId = editor.getCurrentPageId()
-                val partials = elements.mapNotNull { it.toShapePartial(pageId) }
-                // create shapes one by one so a single invalid shape
-                // doesn't prevent the others from rendering
-                for (partial in partials) {
-                    val created = runCatching { editor.createShapes(arrayOf(partial)) }
-                    if (created.isFailure) {
-                        Console.warn("skipped shape: " + (created.exceptionOrNull()?.message ?: "unknown error"))
-                    }
-                }
-                // camera placement is owned by the camera constraints
-                // (initialZoom 'fit-x-100' + origin), not zoomToFit
-                // grow the page if stored content extends below the initial height
-                growBoundsToContent()
-
-                // SAVE: batch-replace when content changed (poll every 2.5s)
-                var lastPayload: String? = null
-                while (isActive) {
-                    delay(2500)
-                    val result = runCatching {
-                        val current = editor.getCurrentPageShapes().mapNotNull { it.toElementOrNull() }
-                        val payload = json.encodeToString(current)
-                        if (payload != lastPayload) {
-                            if (api.replaceElements(props.documentId, current)) {
-                                lastPayload = payload
-                            }
-                        }
-                    }
-                    // editor was disposed (component unmounted) — stop the loop
-                    if (result.isFailure) {
-                        Console.warn("autosave loop stopped:", result.exceptionOrNull()?.message)
-                        break
-                    }
-                }
-            }
+            onCanvasMount(editor, props.documentId)
         }
     }
 }
