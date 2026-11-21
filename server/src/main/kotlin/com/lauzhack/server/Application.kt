@@ -1,6 +1,7 @@
 package com.lauzhack.server
 
 import com.lauzhack.server.ai.AiModels
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import com.lauzhack.server.agent.AgentService
 import com.lauzhack.server.agent.KoogPageAgent
 import com.lauzhack.server.chunking.ChunkService
@@ -47,13 +48,13 @@ fun Application.module() {
         ocrModelId = setting("ai.ocrModel") ?: error("ai.ocrModel missing"),
         hintModelId = setting("ai.hintModel") ?: error("ai.hintModel missing"),
         agentModelId = setting("ai.agentModel") ?: error("ai.agentModel missing"),
-        anthropicApiKey = setting("ai.anthropicApiKey"),
-        reasoningModelId = setting("ai.reasoningModel") ?: error("ai.reasoningModel missing"),
     )
     if (ai.ocrModel == null) environment.log.warn("TOGETHER_API_KEY not set: OCR, hints and plots disabled")
-    if (ai.reasoningModel == null) environment.log.warn("ANTHROPIC_API_KEY not set: reasoning model disabled")
+
+    val ocrEffort = ReasoningEffort.valueOf(setting("ai.ocrReasoningEffort")?.uppercase() ?: "NONE")
+    val agentEffort = ReasoningEffort.valueOf(setting("ai.agentReasoningEffort")?.uppercase() ?: "MEDIUM")
     val ocr = OcrService(
-        recognizer = ai.ocrModel?.let { KoogChunkRecognizer(ai.executor, it) },
+        recognizer = ai.ocrModel?.let { KoogChunkRecognizer(ai.executor, it, reasoningEffort = ocrEffort) },
         scope = this,
     )
     ocr.start(ChunkService.events)
@@ -65,7 +66,7 @@ fun Application.module() {
         exercise = { id -> getDocument(id)?.exercise.orEmpty() },
     )
     val agent = AgentService(
-        agent = ai.agentModel?.let { KoogPageAgent(ai.executor, it, jsonConfig) },
+        agent = ai.agentModel?.let { KoogPageAgent(ai.executor, it, jsonConfig, reasoningEffort = agentEffort) },
         ocr = ocr,
         hints = hints,
         scope = this,

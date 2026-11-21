@@ -325,10 +325,15 @@ in LaTeX. Results are cached by chunk content hash and debounced (1 s) while a
 block is being written; `OcrService.events` streams them to the reasoning agent.
 
 ```sh
-export TOGETHER_API_KEY=...      # OCR (optional: without it chunks stay pending)
-export ANTHROPIC_API_KEY=...     # reasoning model (not used yet)
+export TOGETHER_API_KEY=...      # OCR + hints + the page agent
 ./gradlew :server:run
 ```
+
+Thinking levels are configurable per role (`reasoning_effort`, Together AI
+OpenAI-compatible API): OCR defaults to **none** (vision transcription, latency
+matters), the page agent to **medium** (the tutor reasons about actions).
+Override with `OCR_REASONING_EFFORT` / `AGENT_REASONING_EFFORT`
+(`none|minimal|low|medium|high`).
 
 ```
 GET    /api/documents/{id}/transcription               [{ chunk, transcription | null }]   (debug)

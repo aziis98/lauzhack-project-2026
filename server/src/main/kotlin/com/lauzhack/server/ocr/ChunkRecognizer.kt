@@ -1,6 +1,8 @@
 package com.lauzhack.server.ocr
 
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.executor.model.executeStructured
 import ai.koog.prompt.llm.LLModel
@@ -75,6 +77,7 @@ internal val OCR_SYSTEM_PROMPT = """
 class KoogChunkRecognizer(
     private val executor: PromptExecutor,
     private val model: LLModel,
+    private val reasoningEffort: ReasoningEffort = ReasoningEffort.NONE,
 ) : ChunkRecognizer {
 
     /** Wire format the model fills in; kept separate from the shared domain type. */
@@ -88,7 +91,7 @@ class KoogChunkRecognizer(
                 text(buildOcrUserText(fragments))
                 image(AttachmentSource.Image(content = AttachmentContent.Binary.Bytes(png), format = "png"))
             }
-        }
+        }.withParams(OpenAIChatParams(reasoningEffort = reasoningEffort))
         val output = executor.executeStructured(request, model, serializer<OcrOutput>(), examples = EXAMPLES)
             .getOrThrow().data
         return ChunkTranscription(output.kind, output.content.trim())

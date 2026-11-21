@@ -1,6 +1,8 @@
 package com.lauzhack.server.agent
 
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.executor.model.executeStructured
 import ai.koog.prompt.llm.LLModel
@@ -164,6 +166,7 @@ class KoogPageAgent(
     private val executor: PromptExecutor,
     private val model: LLModel,
     private val json: Json,
+    private val reasoningEffort: ReasoningEffort = ReasoningEffort.MEDIUM,
 ) : PageAgent {
 
     private val log = LoggerFactory.getLogger(KoogPageAgent::class.java)
@@ -175,7 +178,7 @@ class KoogPageAgent(
                 if (m.role == "user") user(m.content) else assistant(m.content)
             }
             user(userMessage)
-        }
+        }.withParams(OpenAIChatParams(reasoningEffort = reasoningEffort))
 
         if (!loggedSystemPrompt) {
             loggedSystemPrompt = true

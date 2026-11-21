@@ -1,7 +1,5 @@
 package com.lauzhack.server.ai
 
-import ai.koog.prompt.executor.clients.anthropic.AnthropicClientSettings
-import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
@@ -15,17 +13,15 @@ import ai.koog.prompt.llm.LLModel
  *  - [ocrModel]: light vision model on **Together AI** (OpenAI-compatible API),
  *    transcribes chunk images;
  *  - [hintModel]: model on **Together AI** that answers circled-"?" help requests;
- *  - [reasoningModel]: heavy model on **Anthropic** (plots, checks, recall).
+ *  - [agentModel]: the page agent, one structured call per settled page.
  *
- * Each is null when its API key is missing, so the app still runs without AI.
+ * Each is null when the API key is missing, so the app still runs without AI.
  */
 class AiModels(
     togetherApiKey: String?,
     ocrModelId: String,
     hintModelId: String,
     agentModelId: String,
-    anthropicApiKey: String?,
-    reasoningModelId: String,
 ) {
     /** Together speaks the OpenAI Chat Completions protocol, so Koog's OpenAI client is pointed at it. */
     val ocrModel: LLModel? = togetherApiKey?.let { togetherModel(ocrModelId, vision = true) }
@@ -34,43 +30,12 @@ class AiModels(
     /** The page agent (one call per changed page, structured actions out). */
     val agentModel: LLModel? = togetherApiKey?.let { togetherModel(agentModelId, vision = false) }
 
-    /**
-     * Koog 1.3.0 has no constants for the newest Claude models, so the model is
-     * declared here and registered in the client's version map (which is how the
-     * Anthropic client resolves model ids).
-     */
-    val reasoningModel: LLModel? = anthropicApiKey?.let {
-        LLModel(
-            provider = LLMProvider.Anthropic,
-            id = reasoningModelId,
-            capabilities = listOf(
-                LLMCapability.Tools,
-                LLMCapability.ToolChoice,
-                LLMCapability.Vision.Image,
-                LLMCapability.Completion,
-                LLMCapability.Schema.JSON.Basic,
-                LLMCapability.Schema.JSON.Standard,
-            ),
-            contextLength = 200_000,
-            maxOutputTokens = 32_000,
-        )
-    }
-
     val executor: PromptExecutor = MultiLLMPromptExecutor(
         buildMap {
             if (togetherApiKey != null) {
                 put(
                     LLMProvider.OpenAI,
                     OpenAILLMClient(apiKey = togetherApiKey, settings = OpenAIClientSettings(baseUrl = TOGETHER_BASE_URL)),
-                )
-            }
-            if (anthropicApiKey != null && reasoningModel != null) {
-                put(
-                    LLMProvider.Anthropic,
-                    AnthropicLLMClient(
-                        apiKey = anthropicApiKey,
-                        settings = AnthropicClientSettings(modelVersionsMap = mapOf(reasoningModel to reasoningModelId)),
-                    ),
                 )
             }
         },
