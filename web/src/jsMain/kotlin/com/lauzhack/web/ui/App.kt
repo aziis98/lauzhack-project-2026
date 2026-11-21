@@ -2,6 +2,7 @@ package com.lauzhack.web.ui
 
 import com.lauzhack.shared.api.DrawingApi
 import com.lauzhack.shared.domain.Document
+import com.lauzhack.web.tldraw.Editor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -31,6 +32,7 @@ val App = FC<Props> {
     var documents by useState<List<Document>?>(null)
     var selected by useState(initialDocId())
     var newName by useState("")
+    var activeEditor by useState<Editor?>(null)
 
     fun refresh() {
         scope.launch { documents = api.listDocuments() }
@@ -115,13 +117,20 @@ val App = FC<Props> {
             ReactHTML.button {
                 className = ClassName("back-fab")
                 +"←"
-                onClick = { _ -> selected = null }
+                onClick = { _ ->
+                    selected = null
+                    activeEditor = null
+                }
             }
+
+            // minimal floating tool pill
+            Toolbar { editor = activeEditor }
 
             ReactHTML.div {
                 className = ClassName("canvas-fill")
                 Canvas {
                     documentId = openId
+                    onReady = { activeEditor = it }
                 }
             }
         }

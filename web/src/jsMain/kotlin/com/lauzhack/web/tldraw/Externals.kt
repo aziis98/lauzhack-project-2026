@@ -26,6 +26,7 @@ external interface Editor {
     fun createShapes(shapes: Array<dynamic>)
     fun deleteShapes(ids: Array<String>)
     fun getShape(id: String): TlRecord?
+    fun setCurrentTool(id: String)
 }
 
 /** A tldraw store record (shapes, pages, bindings, ...). */

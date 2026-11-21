@@ -1,6 +1,7 @@
 package com.lauzhack.web.ui
 
 import com.lauzhack.shared.api.DrawingApi
+import com.lauzhack.web.tldraw.Editor
 import com.lauzhack.web.tldraw.Tldraw
 import com.lauzhack.web.tldraw.toElementOrNull
 import com.lauzhack.web.tldraw.toShapePartial
@@ -20,6 +21,7 @@ private val json = Json
 
 external interface CanvasProps : Props {
     var documentId: String
+    var onReady: ((Editor) -> Unit)?
 }
 
 /** Hides tldraw's default chrome; we provide our own minimal toolbar. */
@@ -86,6 +88,8 @@ val Canvas = FC<CanvasProps> { props ->
         components = hiddenComponents()
         options = singlePageOptions()
         onMount = { editor ->
+            props.onReady?.invoke(editor)
+
             CoroutineScope(Dispatchers.Default).launch {
                 // LOAD: fetch the document's elements and push them into the editor.
                 // If anything fails we bail out WITHOUT starting the autosave loop,

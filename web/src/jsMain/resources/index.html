@@ -188,6 +188,46 @@
 			background: #fff;
 		}
 
+		/* ------- minimal floating tool pill ------- */
+		.tool-dock {
+			position: absolute;
+			top: 16px;
+			left: 50%;
+			transform: translateX(-50%);
+			z-index: 1000;
+			display: flex;
+			gap: 2px;
+			padding: 3px;
+			background: rgba(255, 255, 255, 0.9);
+			backdrop-filter: blur(10px);
+			border-radius: 12px;
+			box-shadow: var(--shadow);
+			max-width: calc(100vw - 28px);
+		}
+
+		.tool {
+			padding: 6px 11px;
+			border-radius: 9px;
+			font-size: 13px;
+			font-weight: 500;
+			color: var(--muted);
+			white-space: nowrap;
+		}
+
+		.tool:hover:not(:disabled) {
+			color: var(--text);
+		}
+
+		.tool.active {
+			background: var(--accent-soft);
+			color: var(--accent);
+		}
+
+		.tool:disabled {
+			opacity: 0.5;
+			cursor: default;
+		}
+
 		/* ------- documents list ------- */
 		.docs {
 			list-style: none;
