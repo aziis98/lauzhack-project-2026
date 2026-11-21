@@ -82,9 +82,9 @@ class KoogPageAgent(
                     AgentAction.HintAction(
                         id = "hint-1",
                         triggerChunkId = "chunk-7",
-                        title = "Regola del prodotto",
-                        message = "2x·√(1−x²) è un prodotto di due funzioni: quale regola si usa per derivare f·g?",
-                        steps = listOf("Chi sono f(x) e g(x) qui?"),
+                        title = "Product rule",
+                        message = "2x·√(1−x²) is a product of two functions: which rule do you use to derive f·g?",
+                        steps = listOf("What are f(x) and g(x) here?"),
                         relatedChunkIds = listOf("chunk-3"),
                     )
                 )
@@ -190,8 +190,9 @@ class KoogPageAgent(
 
             - Use ONLY chunk ids that exist in this conversation; never invent content that is
               not on the page; never assume steps the student did not write.
-            - Speak the student's language (default: Italian) in hint and error text; math
-              inside them in plain Unicode (x², √, π, f'(x)), never LaTeX.
+            - Write hint and error text in ENGLISH (regardless of the student's
+              language, for now); math inside them in plain Unicode (x², √, π,
+              f'(x)), never LaTeX.
             - ids are yours to choose but must be STABLE: re-emitting an action keeps its id,
               withdrawing repeats it with "remove": true.
         """.trimIndent()
