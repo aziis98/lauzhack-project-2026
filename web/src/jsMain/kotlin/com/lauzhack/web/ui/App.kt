@@ -25,8 +25,9 @@ private fun formatTime(ms: Long): String {
 }
 
 val App = FC<Props> {
+    // the currently open document's FULL id (doc:<uuid>); null = home
+    var selected by useState<String?>(null)
     var documents by useState<List<Document>?>(null)
-    var selected by useState(initialDocId())
     var newName by useState("")
     var activeEditor by useState<Editor?>(null)
 
@@ -34,15 +35,44 @@ val App = FC<Props> {
         scope.launch { documents = api.listDocuments() }
     }
 
-    useEffectOnce {
-        refresh()
-        // keep the app in sync with browser back/forward navigation
-        listenForPopState { docId ->
-            selected = docId
-            if (docId == null) {
-                activeEditor = null
+    // ---- routing: interpret a URL path into app state ----
+    fun handleUrlPath(path: String, replaceUrl: Boolean) {
+        val short = shortIdFromPath(path)
+        val legacy = fullIdFromPath(path)
+        when {
+            short != null || legacy != null -> {
+                val idOrShort = short ?: legacy!!
+                scope.launch {
+                    val doc = runCatching { api.getDocument(idOrShort) }.getOrNull()
+                    selected = doc?.id
+                    if (doc != null && replaceUrl) {
+                        // normalize legacy forms to the /doc/{hex} path
+                        BrowserHistory.replaceState(null, "", docPath(doc.id))
+                    }
+                }
+            }
+
+            else -> {
+                selected = null
+                if (replaceUrl && path != "/" && path.isNotEmpty()) {
+                    BrowserHistory.replaceState(null, "", "/")
+                }
             }
         }
+    }
+
+    useEffectOnce {
+        refresh()
+        // initial URL: path first, then the legacy ?doc= deep link
+        val path = Location.pathname
+        val queryDoc = docIdFromQuery()
+        if (path != "/") {
+            handleUrlPath(path, replaceUrl = true)
+        } else if (queryDoc != null) {
+            handleUrlPath("/$queryDoc", replaceUrl = true)
+        }
+        // keep the app in sync with browser back/forward navigation
+        listenForPopState { newPath -> handleUrlPath(newPath, replaceUrl = false) }
     }
 
     val openId = selected

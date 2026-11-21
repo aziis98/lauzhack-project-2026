@@ -11,6 +11,7 @@ import com.lauzhack.server.db.createElement
 import com.lauzhack.server.db.deleteDocument
 import com.lauzhack.server.db.deleteElement
 import com.lauzhack.server.db.getDocument
+import com.lauzhack.server.db.resolveDocument
 import com.lauzhack.server.db.listDocuments
 import com.lauzhack.server.db.listElements
 import com.lauzhack.server.db.replaceElements
@@ -47,7 +48,8 @@ fun Route.apiRoutes(ocr: OcrService) {
         route("{id}") {
             get {
                 val id = call.parameters["id"]!!
-                val doc = getDocument(id)
+                // accepts the full id or the 16-hex short form used in URLs
+                val doc = resolveDocument(id)
                 if (doc == null) call.respond(HttpStatusCode.NotFound) else call.respond(doc)
             }
             delete {

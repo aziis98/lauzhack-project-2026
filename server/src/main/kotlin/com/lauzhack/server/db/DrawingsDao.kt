@@ -6,6 +6,7 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -41,6 +42,28 @@ fun getDocument(id: String): Document? = transaction {
         .where { DocumentsTable.id eq id }
         .firstOrNull()
         ?.toDocument()
+}
+
+/**
+ * Resolves a document by full id (`doc:<uuid>`) or by its short form:
+ * the first 16 hex chars of the uuid, used in the `/doc/{hex}` URL path.
+ */
+fun resolveDocument(idOrShort: String): Document? = transaction {
+    when {
+        idOrShort.startsWith("doc:") -> getDocument(idOrShort)
+
+        idOrShort.matches(Regex("[0-9a-f]{16}")) -> {
+            // dash the short hex the way a uuid is formatted: 8-4-4, then prefix-match
+            val dashed = idOrShort.substring(0, 8) + "-" + idOrShort.substring(8, 12) + "-" + idOrShort.substring(12, 16)
+            DocumentsTable
+                .selectAll()
+                .where { DocumentsTable.id like ("doc:$dashed%") }
+                .firstOrNull()
+                ?.toDocument()
+        }
+
+        else -> null
+    }
 }
 
 fun deleteDocument(id: String): Boolean = transaction {

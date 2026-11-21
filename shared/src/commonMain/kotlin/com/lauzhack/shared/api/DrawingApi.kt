@@ -30,6 +30,14 @@ class DrawingApi(
     suspend fun listDocuments(): List<Document> =
         client.get("$api/documents").body()
 
+    /** Resolves a full document id OR a 16-hex short id; null if not found. */
+    suspend fun getDocument(idOrShortId: String): Document? =
+        try {
+            client.get("$api/documents/$idOrShortId").body<Document>()
+        } catch (cause: Exception) {
+            null
+        }
+
     suspend fun createDocument(name: String): Document =
         client.post("$api/documents") {
             contentType(ContentType.Application.Json)
