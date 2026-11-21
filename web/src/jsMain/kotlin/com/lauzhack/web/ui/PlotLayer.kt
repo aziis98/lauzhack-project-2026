@@ -83,8 +83,10 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
         asDynamic().style = css
         // never let the canvas see this pointer: tldraw captures the pointer on
         // canvas pointerdown (useCanvasEvents), which would steal the pointerup
-        // and the click would never complete
+        // and the click would never complete. On iPad Safari, touchstart also
+        // needs to be stopped or the canvas gesture recognizer eats the tap.
         onPointerDown = { it.stopPropagation() }
+        onTouchStart = { it.stopPropagation() }
         onClick = { open = !open }
         ReactHTML.div {
             className = ClassName("plot-btn-top")
