@@ -81,13 +81,16 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
         css.left = "${btnLeft}px"
         css.top = "${btnTop}px"
         asDynamic().style = css
-        // never let the canvas see this pointer: tldraw captures the pointer on
-        // canvas pointerdown (useCanvasEvents), which would steal the pointerup
-        // and the click would never complete. On iPad Safari, touchstart also
-        // needs to be stopped or the canvas gesture recognizer eats the tap.
+        // iPad/desktop: handle the tap at pointerup level — we cannot rely on
+        // iOS click synthesis because tldraw's gesture handling on the canvas
+        // interferes. Stop pointerdown (prevents tldraw's pointer capture),
+        // then act on pointerup directly.
         onPointerDown = { it.stopPropagation() }
-        onTouchStart = { it.stopPropagation() }
-        onClick = { open = !open }
+        onPointerUp = {
+            it.stopPropagation()
+            it.preventDefault()
+            open = !open
+        }
         ReactHTML.div {
             className = ClassName("plot-btn-top")
             ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
@@ -102,8 +105,9 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
             title = "Hide this plot"
             asDynamic()["aria-label"] = "Hide plot button"
             onPointerDown = { it.stopPropagation() }
-            onClick = {
-                it.stopPropagation() // don't toggle the panel open
+            onPointerUp = {
+                it.stopPropagation()
+                it.preventDefault()
                 props.onHide()
             }
             +"✕"
@@ -160,7 +164,11 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
                     asDynamic()["aria-label"] = "Close plot"
                     // keep the canvas from capturing the pointer (see .plot-btn)
                     onPointerDown = { it.stopPropagation() }
-                    onClick = { open = false }
+                    onPointerUp = {
+                        it.stopPropagation()
+                        it.preventDefault()
+                        open = false
+                    }
                     +"✕"
                 }
             }
