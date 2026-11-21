@@ -2,6 +2,7 @@
 // webpack-dev-server 5 dropped the object form of `proxy` — array form required.
 config.devServer = config.devServer || {};
 config.devServer.port = 8081;
+config.devServer.historyApiFallback = true;
 config.devServer.proxy = [
 	{
 		context: ["/api"],

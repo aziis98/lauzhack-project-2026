@@ -18,10 +18,6 @@ private val api = DrawingApi()
 
 private val scope = CoroutineScope(Dispatchers.Default)
 
-/** Supports deep links like /?doc=doc:123 that open a drawing directly. */
-private fun initialDocId(): String? =
-    js("new URLSearchParams(window.location.search).get('doc')")
-
 private fun formatTime(ms: Long): String {
     val date: dynamic = js("new Date()")
     date.setTime(ms)
@@ -40,6 +36,13 @@ val App = FC<Props> {
 
     useEffectOnce {
         refresh()
+        // keep the app in sync with browser back/forward navigation
+        listenForPopState { docId ->
+            selected = docId
+            if (docId == null) {
+                activeEditor = null
+            }
+        }
     }
 
     val openId = selected
@@ -95,7 +98,10 @@ val App = FC<Props> {
                                 key = Key(doc.id)
                                 ReactHTML.button {
                                     className = ClassName("doc-row")
-                                    onClick = { _ -> selected = doc.id }
+                                    onClick = { _ ->
+                                        selected = doc.id
+                                        navigateToDocument(doc.id)
+                                    }
                                     ReactHTML.span { +doc.name }
                                     ReactHTML.span {
                                         className = ClassName("muted mono")
@@ -120,6 +126,7 @@ val App = FC<Props> {
                 onClick = { _ ->
                     selected = null
                     activeEditor = null
+                    navigateHome()
                 }
                 ReactHTML.span { className = ClassName("ph"); +"ph-arrow-left" }
             }
@@ -133,6 +140,9 @@ val App = FC<Props> {
             ReactHTML.div {
                 className = ClassName("canvas-fill")
                 Canvas {
+                    // remount the editor when switching documents (the load/autosave
+                    // coroutine and editor instance are bound to one document)
+                    key = Key(openId)
                     documentId = openId
                     onReady = { activeEditor = it }
                 }

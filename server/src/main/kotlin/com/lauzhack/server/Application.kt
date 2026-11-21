@@ -12,12 +12,16 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.http.content.staticFiles
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.path
+import io.ktor.server.response.respondFile
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -81,6 +85,24 @@ private fun io.ktor.server.routing.Routing.serveFrontendIfBuilt() {
         staticFiles("/", dist, index = "index.html") {
             // always revalidate so updated bundles are picked up immediately
             cacheControl { listOf(CacheControl.NoCache(null)) }
+        }
+
+        // SPA fallback: serve real files from dist if they exist, otherwise the
+        // app shell (so URLs like /doc:123 work on direct visits)
+        get("/{...}") {
+            val path = call.request.path()
+            if (path.startsWith("/api")) {
+                call.respondText("", status = HttpStatusCode.NotFound)
+            } else {
+                val requested = path.removePrefix("/")
+                val file = File(dist, requested)
+                val safe = file.isFile && file.canonicalPath.startsWith(dist.canonicalPath + File.separator)
+                if (safe) {
+                    call.respondFile(file)
+                } else {
+                    call.respondFile(File(dist, "index.html"))
+                }
+            }
         }
     }
 }
