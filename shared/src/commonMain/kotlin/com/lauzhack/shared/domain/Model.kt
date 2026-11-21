@@ -19,6 +19,8 @@ data class Document(
     val updatedAt: Long = 0L,
     /** Exercise statement in Markdown with `$…$` / `$$…$$` LaTeX math (KaTeX); empty for free drawings. */
     val exercise: String = "",
+    /** How detailed the AI hints are on this document (the slider on the canvas). */
+    val hintLevel: com.lauzhack.shared.hint.HintLevel = com.lauzhack.shared.hint.HintLevel.MEDIUM,
 )
 
 @Serializable

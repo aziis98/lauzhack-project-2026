@@ -67,6 +67,13 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
                 val doc = resolveDocument(id)
                 if (doc == null) call.respond(HttpStatusCode.NotFound) else call.respond(doc)
             }
+            // The hint detail slider: { "level": "MINIMAL" | "MEDIUM" | "GUIDED" }
+            patch("hint-level") {
+                val id = call.parameters["id"]!!
+                val request = call.receive<com.lauzhack.shared.dto.SetHintLevelRequest>()
+                val doc = com.lauzhack.server.db.setHintLevel(id, request.level)
+                if (doc == null) call.respond(HttpStatusCode.NotFound) else call.respond(doc)
+            }
             delete {
                 val id = call.parameters["id"]!!
                 if (deleteDocument(id)) {
@@ -150,12 +157,23 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
                         call.respond(HttpStatusCode.NotFound)
                         return@post
                     }
-                    val hint = hints.request(id)
+                    val hint = agent.requestHelp(id)
+                    if (hint == null) call.respond(HttpStatusCode.ServiceUnavailable) else call.respond(HttpStatusCode.Created, hint)
+                }
+                // The student clicked a word or formula of the exercise statement.
+                post("define") {
+                    val id = call.parameters["id"]!!
+                    val request = call.receive<com.lauzhack.shared.dto.DefineTermRequest>()
+                    if (getDocument(id) == null || request.term.isBlank()) {
+                        call.respond(HttpStatusCode.BadRequest)
+                        return@post
+                    }
+                    val hint = agent.requestDefinition(id, request)
                     if (hint == null) call.respond(HttpStatusCode.ServiceUnavailable) else call.respond(HttpStatusCode.Created, hint)
                 }
                 // "Another hint" for a card the student did not understand.
                 post("{hid}/more") {
-                    val hint = hints.more(call.parameters["id"]!!, call.parameters["hid"]!!)
+                    val hint = agent.requestMoreHelp(call.parameters["id"]!!, call.parameters["hid"]!!)
                     if (hint == null) call.respond(HttpStatusCode.NotFound) else call.respond(hint)
                 }
                 // The student dragged the card: { "x": …, "y": … } in page coordinates.

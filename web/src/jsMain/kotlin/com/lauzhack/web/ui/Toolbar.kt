@@ -10,7 +10,9 @@ import react.FC
 import react.Key
 import react.Props
 import react.dom.html.ReactHTML
+import react.useEffect
 import react.useState
+import com.lauzhack.shared.hint.HintLevel
 import web.cssom.ClassName
 
 external interface ToolbarProps : Props {
@@ -47,7 +49,14 @@ val Toolbar = FC<ToolbarProps> { props ->
     var active by useState("select")
     var ink by useState("black")
     var penMode by useState(false)
+    var hintLevel by useState(HintLevel.MEDIUM)
     val editor = props.editor
+
+    // the slider shows the open document's level (loaded once the canvas is ready)
+    useEffect(editor) {
+        val doc = canvasDocumentId ?: return@useEffect
+        runCatching { toolbarApi.getDocument(doc) }.getOrNull()?.let { hintLevel = it.hintLevel }
+    }
 
     fun ChildrenBuilder.iconButton(label: String, icon: String, isActive: Boolean = false, onPress: (Editor) -> Unit) {
         ReactHTML.button {
@@ -119,6 +128,28 @@ val Toolbar = FC<ToolbarProps> { props ->
             ReactHTML.span { className = ClassName("ph"); +"ph-question" }
         }
 
+        // How detailed the hints are: minimal · medium · guided (saved per document)
+        ReactHTML.label {
+            className = ClassName("hint-level")
+            val levelName = hintLevelLabel(hintLevel)
+            title = "Hint detail: $levelName"
+            ReactHTML.input {
+                asDynamic().type = "range"
+                asDynamic().min = 0
+                asDynamic().max = HintLevel.entries.size - 1
+                asDynamic().step = 1
+                value = hintLevel.ordinal.toString()
+                disabled = editor == null
+                asDynamic()["aria-label"] = "Hint detail"
+                onChange = { event ->
+                    val next = HintLevel.entries[event.target.value.toInt()]
+                    hintLevel = next
+                    canvasDocumentId?.let { doc -> MainScope().launch { runCatching { toolbarApi.setHintLevel(doc, next) } } }
+                }
+            }
+            ReactHTML.span { className = ClassName("hint-level-name"); +levelName }
+        }
+
         ReactHTML.span { className = ClassName("tool-sep") }
 
         iconButton(
@@ -133,4 +164,10 @@ val Toolbar = FC<ToolbarProps> { props ->
             penMode = next
         }
     }
+}
+
+private fun hintLevelLabel(level: HintLevel) = when (level) {
+    HintLevel.MINIMAL -> "Minimal"
+    HintLevel.MEDIUM -> "Medium"
+    HintLevel.GUIDED -> "Guided"
 }

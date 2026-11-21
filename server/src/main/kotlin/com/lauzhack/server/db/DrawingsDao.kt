@@ -2,6 +2,7 @@ package com.lauzhack.server.db
 
 import com.lauzhack.shared.domain.Document
 import com.lauzhack.shared.domain.Element
+import com.lauzhack.shared.hint.HintLevel
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -70,6 +71,14 @@ fun resolveDocument(idOrShort: String): Document? = transaction {
 
         else -> getDocument("doc:$idOrShort")
     }
+}
+
+/** Sets the hint detail level; returns the updated document, or null when it does not exist. */
+fun setHintLevel(id: String, level: HintLevel): Document? = transaction {
+    val updated = DocumentsTable.update({ DocumentsTable.id eq id }) { row ->
+        row[DocumentsTable.hintLevel] = level.name
+    }
+    if (updated == 0) null else getDocument(id)
 }
 
 fun deleteDocument(id: String): Boolean = transaction {

@@ -61,6 +61,13 @@ class DrawingApi(
             setBody(CreateDocumentRequest(name, exercise))
         }.body()
 
+    /** Saves the hint detail level of a document (the slider on the canvas). */
+    suspend fun setHintLevel(documentId: String, level: com.lauzhack.shared.hint.HintLevel): Boolean =
+        client.patch("$api/documents/$documentId/hint-level") {
+            contentType(ContentType.Application.Json)
+            setBody(com.lauzhack.shared.dto.SetHintLevelRequest(level))
+        }.status.value in 200..299
+
     /** Converts a region selected on a PDF page into exercise Markdown + LaTeX. */
     suspend fun convertExerciseRegion(request: ConvertRegionRequest): ConvertRegionResponse {
         val response = client.post("$api/exercises/convert") {
@@ -111,6 +118,13 @@ class DrawingApi(
     /** Asks for a hint without drawing a circled "?" (toolbar button). */
     suspend fun requestHint(documentId: String): Boolean =
         client.post("$api/documents/$documentId/hints").status.value in 200..299
+
+    /** The student clicked a word (or formula) of the exercise statement: explain it. */
+    suspend fun defineTerm(documentId: String, request: com.lauzhack.shared.dto.DefineTermRequest): Boolean =
+        client.post("$api/documents/$documentId/hints/define") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.status.value in 200..299
 
     /** "Another hint" for a card the student did not understand. */
     suspend fun moreHint(documentId: String, hintId: String): Boolean =

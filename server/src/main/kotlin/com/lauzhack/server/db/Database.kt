@@ -1,6 +1,7 @@
 package com.lauzhack.server.db
 
 import com.lauzhack.shared.domain.Document
+import com.lauzhack.shared.hint.HintLevel
 import com.lauzhack.shared.domain.Element
 import com.lauzhack.shared.domain.ElementData
 import com.lauzhack.shared.domain.Style
@@ -27,6 +28,10 @@ fun initDatabase() {
     runCatching {
         transaction { exec("ALTER TABLE documents ADD COLUMN exercise TEXT NOT NULL DEFAULT ''") }
     }
+    // ...and before the hint detail level existed.
+    runCatching {
+        transaction { exec("ALTER TABLE documents ADD COLUMN hint_level VARCHAR(16) NOT NULL DEFAULT 'MEDIUM'") }
+    }
     seedExampleExercises()
 }
 
@@ -34,6 +39,7 @@ fun ResultRow.toDocument(): Document = Document(
     id = this[DocumentsTable.id],
     name = this[DocumentsTable.name],
     exercise = this[DocumentsTable.exercise],
+    hintLevel = runCatching { HintLevel.valueOf(this[DocumentsTable.hintLevel]) }.getOrDefault(HintLevel.MEDIUM),
     updatedAt = this[DocumentsTable.updatedAt],
 )
 

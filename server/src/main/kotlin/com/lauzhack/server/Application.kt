@@ -72,6 +72,7 @@ fun Application.module() {
         scope = this,
         json = jsonConfig,
         exercise = { id -> getDocument(id)?.exercise.orEmpty() },
+        hintLevel = { id -> getDocument(id)?.hintLevel ?: com.lauzhack.shared.hint.HintLevel.MEDIUM },
     )
     agent.start(ocr.events)
 

@@ -7,6 +7,8 @@ object DocumentsTable : Table("documents") {
     val id = varchar("id", 128)
     val name = varchar("name", 256)
     val exercise = text("exercise").default("")
+    /** HintLevel name; see shared/hint/Hint.kt. */
+    val hintLevel = varchar("hint_level", 16).default("MEDIUM")
     val createdAt = long("created_at")
     val updatedAt = long("updated_at")
     override val primaryKey = PrimaryKey(id)
