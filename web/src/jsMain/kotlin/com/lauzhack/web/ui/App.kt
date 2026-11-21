@@ -66,6 +66,7 @@ val App = FC<Props> {
     }
 
     useEffectOnce {
+        debugMode = debugFromQuery()
         refresh()
         handleUrlPath(Location.pathname, replaceUrl = true)
         // keep the app in sync with browser back/forward navigation
@@ -243,6 +244,11 @@ val App = FC<Props> {
                     documentId = openId
                     onReady = { activeEditor = it }
                 }
+            }
+
+            // ?debug: right drawer with the agent/OCR transcripts + canvas overlays
+            if (debugMode) {
+                DebugDrawer { documentId = openId }
             }
         }
     }

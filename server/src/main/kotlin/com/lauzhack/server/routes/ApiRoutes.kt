@@ -2,10 +2,22 @@ package com.lauzhack.server.routes
 
 import com.lauzhack.server.chunking.ChunkService
 import com.lauzhack.server.hint.HintService
+import com.lauzhack.server.agent.AgentService
 import com.lauzhack.server.ocr.ChunkRasterizer
 import com.lauzhack.server.ocr.OcrService
 import com.lauzhack.server.ocr.SymbolAnnotator
+import com.lauzhack.server.ocr.buildOcrUserText
+import com.lauzhack.server.ocr.OCR_SYSTEM_PROMPT
+import com.lauzhack.server.agent.PAGE_AGENT_SYSTEM_PROMPT
 import com.lauzhack.shared.chunking.Chunk
+import com.lauzhack.shared.debug.DebugAgent
+import com.lauzhack.shared.debug.DebugBox
+import com.lauzhack.shared.debug.DebugOcr
+import com.lauzhack.shared.debug.DebugOcrChunk
+import com.lauzhack.shared.debug.DebugPayload
+import com.lauzhack.shared.debug.DebugTurn
+import com.lauzhack.shared.debug.labelOf
+import com.lauzhack.shared.ocr.parseBboxes
 import io.ktor.http.ContentType
 import io.ktor.server.response.respondBytes
 import com.lauzhack.shared.ocr.TranscribedChunk
@@ -33,7 +45,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 
-fun Route.apiRoutes(ocr: OcrService, hints: HintService) {
+fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
     route("/api/documents") {
         get {
             call.respond(listDocuments())
@@ -101,6 +113,16 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService) {
                 val png = chunkPng(id, chunk)
                 val annotator = SymbolAnnotator()
                 call.respondBytes(annotator.renderAnnotated(png, annotator.annotate(png)), ContentType.Image.PNG)
+            }
+
+            // Wire-level debug view: agent conversation, OCR prompts, chunks, hints (?debug mode).
+            get("debug") {
+                val id = call.parameters["id"]!!
+                if (getDocument(id) == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(debugPayload(id, ocr, hints, agent))
+                }
             }
 
             // Chunks with their OCR result (null = pending); debug/inspection.
@@ -211,4 +233,65 @@ private suspend fun chunkOf(documentId: String, cid: String?): Chunk? =
 private suspend fun chunkPng(documentId: String, chunk: Chunk): ByteArray {
     val ids = chunk.strokeIds.toSet()
     return ChunkRasterizer().render(chunk.bounds, listElements(documentId).filter { it.id in ids })
+}
+
+/**
+ * Builds the full wire-level debug view of one document's pipeline: the agent
+ * conversation (system prompt + every turn), the OCR prompts and answers per
+ * chunk (with the model's `\bbox` symbols mapped back into page coordinates),
+ * the chunks themselves and the current hints.
+ */
+private suspend fun debugPayload(
+    documentId: String,
+    ocr: OcrService,
+    hints: HintService,
+    agent: AgentService,
+): DebugPayload {
+    val chunks = ChunkService.snapshot(documentId)
+    val transcribed = ocr.snapshot(documentId).associateBy { it.chunk.id }
+    val rasterizer = ChunkRasterizer()
+    val annotator = SymbolAnnotator()
+
+    val ocrChunks = chunks.map { chunk ->
+        val png = chunkPng(documentId, chunk)
+        val fragments = annotator.annotate(png)
+        val (scale, padding) = rasterizer.rasterParams(chunk.bounds)
+
+        // image px → page units
+        fun toPageX(img: Double) = chunk.bounds.minX + (img - padding) / scale
+        fun toPageY(img: Double) = chunk.bounds.minY + (img - padding) / scale
+
+        val transcription = transcribed[chunk.id]?.transcription
+
+        DebugOcrChunk(
+            chunkId = chunk.id,
+            userText = buildOcrUserText(fragments),
+            fragments = fragments,
+            response = transcription,
+            modelBoxes = transcription?.content.orEmpty().parseBboxes().map { b ->
+                DebugBox(
+                    toPageX(b.minX.toDouble()), toPageY(b.minY.toDouble()),
+                    toPageX(b.maxX.toDouble()), toPageY(b.maxY.toDouble()),
+                    b.symbol,
+                )
+            },
+            fragmentBoxes = fragments.map { f ->
+                DebugBox(
+                    toPageX(f.minX.toDouble()), toPageY(f.minY.toDouble()),
+                    toPageX(f.maxX.toDouble()), toPageY(f.maxY.toDouble()),
+                    "#${f.id}",
+                )
+            },
+        )
+    }
+
+    return DebugPayload(
+        agent = DebugAgent(
+            systemPrompt = PAGE_AGENT_SYSTEM_PROMPT,
+            turns = agent.conversation(documentId).map { m -> DebugTurn(m.role, labelOf(m), m.content) },
+        ),
+        ocr = DebugOcr(OCR_SYSTEM_PROMPT, ocrChunks),
+        chunks = chunks,
+        hints = hints.hints(documentId),
+    )
 }

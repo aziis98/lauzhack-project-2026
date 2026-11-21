@@ -105,7 +105,7 @@ fun Application.module() {
 
     routing {
         exerciseRoutes(exerciseImport) { base64 -> saveAsset(Base64.decode(base64)) }
-        apiRoutes(ocr, hints)
+        apiRoutes(ocr, hints, agent)
         agentRoutes(agent)
         serveFrontendIfBuilt()
     }

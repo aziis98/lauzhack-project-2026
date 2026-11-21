@@ -43,6 +43,7 @@ val PageOverlay = FC<Props> {
     ExerciseStatement()
     HintLayer()
     PlotLayer()
+    if (debugMode) DebugLayer()
 }
 
 /** The exercise statement (Markdown + KaTeX) printed at the top of the page. */

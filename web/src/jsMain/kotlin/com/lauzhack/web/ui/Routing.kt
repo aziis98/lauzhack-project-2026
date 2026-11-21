@@ -10,6 +10,7 @@ package com.lauzhack.web.ui
 @JsName("location")
 external object Location {
     val pathname: String
+    val search: String
 }
 
 @JsName("history")
@@ -49,6 +50,15 @@ fun shortIdFromPath(path: String): String? {
     return if (short.matches(pathIdSegment)) short else null
 }
 
+/** True when the app was opened with ?debug (pipeline inspector). Set once at boot. */
+internal var debugMode: Boolean = false
+
+fun debugFromQuery(): Boolean =
+    js("new URLSearchParams(window.location.search).has('debug')")
+
+/** Keeps the ?debug flag across pushState navigations. */
+private fun withDebug(path: String): String = if (debugMode) "$path?debug" else path
+
 /** Sync the app to the browser's back/forward navigation (passes the raw path). */
 fun listenForPopState(onPath: (String) -> Unit) {
     Window.addEventListener("popstate") { _ ->
@@ -58,10 +68,10 @@ fun listenForPopState(onPath: (String) -> Unit) {
 
 /** Navigate to a document's path (pushes history so browser Back returns home). */
 fun navigateToDocument(docId: String) {
-    BrowserHistory.pushState(null, "", docPath(docId))
+    BrowserHistory.pushState(null, "", withDebug(docPath(docId)))
 }
 
 /** Navigate back to the document list. */
 fun navigateHome() {
-    BrowserHistory.pushState(null, "", "/")
+    BrowserHistory.pushState(null, "", withDebug("/"))
 }

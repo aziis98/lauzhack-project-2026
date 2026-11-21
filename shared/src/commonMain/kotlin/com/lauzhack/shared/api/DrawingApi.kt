@@ -1,6 +1,7 @@
 package com.lauzhack.shared.api
 
 import com.lauzhack.shared.agent.PlotWithAnchor
+import com.lauzhack.shared.debug.DebugPayload
 import com.lauzhack.shared.domain.Document
 import com.lauzhack.shared.domain.Element
 import com.lauzhack.shared.dto.CreateDocumentRequest
@@ -41,6 +42,14 @@ class DrawingApi(
     suspend fun getDocument(idOrShortId: String): Document? =
         try {
             client.get("$api/documents/$idOrShortId").body<Document>()
+        } catch (cause: Exception) {
+            null
+        }
+
+    /** Wire-level debug view of the pipeline for one document (?debug mode). */
+    suspend fun debug(documentId: String): DebugPayload? =
+        try {
+            client.get("$api/documents/$documentId/debug").body<DebugPayload>()
         } catch (cause: Exception) {
             null
         }
