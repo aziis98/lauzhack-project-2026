@@ -335,6 +335,28 @@ GET    /api/documents/{id}/transcription               [{ chunk, transcription |
 GET    /api/documents/{id}/chunks/{chunkId}/image.png  image sent to the OCR model        (debug)
 ```
 
+### Exercise import from PDF
+
+**Upload PDF** on the home page opens the import screen. The PDF is rendered in the
+browser with pdf.js and never uploaded; the user drags rectangles over it:
+
+- **Text → LaTeX**: the region is rendered to a PNG and sent, with the text pdf.js
+  finds inside it, to `POST /api/exercises/convert`. A vision model
+  (`OCR_MODEL`, `deepseek-ai/DeepSeek-V4.1-Flash-1017` by default) returns Markdown with
+  `$…$` / `$$…$$` LaTeX plus the bounding box of every figure; figures are cropped on
+  the server, stored in the `assets` table and embedded as `![Figure n](/api/assets/…)`.
+  If KaTeX cannot render a formula, the client asks once more with the KaTeX errors.
+- **Figure**: the region is stored as an image as-is (`POST /api/assets`).
+
+Results go into an editable draft (Markdown source + live KaTeX preview), in
+selection order; **Create worksheet** saves it as the document's `exercise`.
+
+```
+POST   /api/exercises/convert   { imagePngBase64, pdfText, previousMarkdown?, katexErrors? } → { markdown, figureCount }
+POST   /api/assets              { imagePngBase64 } → { id, url }
+GET    /api/assets/{id}         the stored image
+```
+
 ### Hints (circled "?")
 
 Full description (Help button, draggable cards, "another hint", what the AI sees): [docs/hints.md](docs/hints.md).

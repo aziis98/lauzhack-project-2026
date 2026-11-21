@@ -835,3 +835,76 @@ input:focus { background: var(--yellow); }
 .ws-new-input:focus { background: transparent; }
 
 .ws-empty { border: var(--line); box-shadow: var(--hard); }
+
+/* ------- PDF exercise import (PdfImport.kt) ------- */
+.pdf-import {
+	position: fixed;
+	inset: 0;
+	z-index: 5000;
+	display: flex;
+	flex-direction: column;
+	background: #f4f4f5;
+}
+.pdf-import-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 16px;
+	background: #fff;
+	border-bottom: 1px solid var(--border);
+}
+.pdf-import-head > .ph { color: #dc2626; font-size: 22px; }
+.pdf-import-title { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdf-mode { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: #f4f4f5; }
+.pdf-mode-btn {
+	display: flex; align-items: center; gap: 6px;
+	border: none; background: none; cursor: pointer;
+	padding: 6px 12px; border-radius: 8px; font: inherit; color: var(--muted);
+}
+.pdf-mode-btn.active { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+.pdf-close {
+	border: none; background: none; cursor: pointer; font-size: 22px;
+	width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+	border-radius: 10px; color: var(--text);
+}
+.pdf-close:hover { background: #f4f4f5; color: var(--text); }
+.pdf-import-body { flex: 1; display: flex; min-height: 0; }
+.pdf-pages {
+	flex: 1; overflow: auto; padding: 16px;
+	display: flex; flex-direction: column; align-items: center; gap: 16px;
+}
+.pdf-hint { margin: 0; color: var(--muted); font-size: 14px; }
+.pdf-page { position: relative; flex: none; background: #fff; box-shadow: var(--shadow); }
+.pdf-page canvas { display: block; }
+.pdf-select-layer { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+.pdf-sel { position: absolute; border: 2px solid var(--accent); background: rgba(37, 99, 235, 0.08); border-radius: 3px; }
+.pdf-sel-figure { border-color: #16a34a; background: rgba(22, 163, 74, 0.08); }
+.pdf-sel-drag { border-style: dashed; }
+.pdf-sel-working { animation: pdf-pulse 1s infinite; }
+.pdf-sel-failed { border-color: #dc2626; background: rgba(220, 38, 38, 0.08); }
+.pdf-sel-n {
+	position: absolute; top: -10px; left: -10px; min-width: 20px; height: 20px; padding: 0 4px;
+	border-radius: 10px; background: var(--accent); color: #fff; font-size: 12px;
+	display: flex; align-items: center; justify-content: center;
+}
+.pdf-sel-figure .pdf-sel-n { background: #16a34a; }
+@keyframes pdf-pulse { 50% { opacity: 0.4; } }
+.pdf-draft {
+	width: 420px; flex: none; overflow: auto; padding: 16px;
+	display: flex; flex-direction: column; gap: 10px;
+	background: #fff; border-left: 1px solid var(--border);
+}
+.pdf-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.pdf-field input { font: inherit; font-size: 15px; color: var(--text); padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.pdf-field-label { font-size: 13px; color: var(--muted); }
+.pdf-preview { min-height: 80px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; overflow-x: auto; }
+.pdf-preview img, .exercise-body img { max-width: 100%; max-height: 320px; width: auto; height: auto; display: block; margin: 8px 0; }
+.pdf-source { min-height: 160px; resize: vertical; font-size: 13px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
+.pdf-working { color: var(--accent); font-size: 14px; animation: pdf-pulse 1s infinite; }
+.pdf-error { color: #b91c1c; background: #fef2f2; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.pdf-error ul { margin: 4px 0 0; padding-left: 18px; }
+.pdf-create { align-self: flex-end; }
+@media (max-width: 900px) {
+	.pdf-import-body { flex-direction: column; }
+	.pdf-draft { width: auto; border-left: none; border-top: 1px solid var(--border); max-height: 45vh; }
+}

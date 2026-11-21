@@ -5,7 +5,13 @@ import com.lauzhack.server.agent.AgentService
 import com.lauzhack.server.agent.KoogPageAgent
 import com.lauzhack.server.chunking.ChunkService
 import com.lauzhack.server.db.getDocument
+import com.lauzhack.server.db.assetUrl
 import com.lauzhack.server.db.initDatabase
+import com.lauzhack.server.db.saveAsset
+import com.lauzhack.server.exercise.ExerciseImportService
+import com.lauzhack.server.exercise.KoogRegionConverter
+import com.lauzhack.server.routes.exerciseRoutes
+import kotlin.io.encoding.Base64
 import com.lauzhack.server.hint.HintService
 import com.lauzhack.server.hint.KoogHintAgent
 import com.lauzhack.server.ocr.KoogChunkRecognizer
@@ -93,7 +99,12 @@ fun Application.module() {
         }
     }
 
+    val exerciseImport = ai.ocrModel?.let { model ->
+        ExerciseImportService(KoogRegionConverter(ai.executor, model)) { png -> assetUrl(saveAsset(png)) }
+    }
+
     routing {
+        exerciseRoutes(exerciseImport) { base64 -> saveAsset(Base64.decode(base64)) }
         apiRoutes(ocr, hints)
         agentRoutes(agent)
         serveFrontendIfBuilt()

@@ -2,9 +2,6 @@ package com.lauzhack.web.ui
 
 import com.lauzhack.shared.api.DrawingApi
 import com.lauzhack.shared.domain.Document
-import com.lauzhack.shared.domain.Element
-import com.lauzhack.shared.domain.ElementData
-import com.lauzhack.shared.domain.Style
 import com.lauzhack.web.tldraw.Editor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +33,8 @@ val App = FC<Props> {
     var newName by useState("")
     var activeEditor by useState<Editor?>(null)
     var activeSubject by useState("all")
+    // the PDF being imported as an exercise (a browser File), null when not importing
+    var importing by useState<dynamic>(null)
 
     fun refresh() {
         scope.launch { documents = api.listDocuments() }
@@ -44,36 +43,6 @@ val App = FC<Props> {
     fun createAndOpen(name: String) {
         scope.launch {
             val doc = api.createDocument(name)
-            refresh()
-            selected = doc.id
-            navigateToDocument(doc.id)
-        }
-    }
-
-    /** Mock PDF import: creates a worksheet with a placeholder element. */
-    fun uploadPdfMock(fileName: String) {
-        val title = fileName
-            .substringBeforeLast(".")
-            .replace(Regex("[-_]+"), " ")
-            .trim()
-            .replaceFirstChar { it.uppercase() }
-            .ifBlank { "Imported worksheet" }
-        scope.launch {
-            val doc = api.createDocument(title)
-            val uuid: String = js("crypto.randomUUID()")
-            val placeholder = Element(
-                id = "shape:$uuid",
-                type = "text",
-                x = 80.0,
-                y = 220.0,
-                zIndex = "a1",
-                style = Style(color = "grey", size = "l"),
-                data = ElementData.Text(
-                    text = "Imported from \"$fileName\" — mock import. The problems will be parsed and placed here!",
-                    w = 700.0,
-                ),
-            )
-            runCatching { api.createElement(doc.id, placeholder) }
             refresh()
             selected = doc.id
             navigateToDocument(doc.id)
@@ -107,6 +76,19 @@ val App = FC<Props> {
 
     if (openId == null) {
         // ---------------- home: dashboard with subject sidebar ----------------
+        val pdfFile = importing
+        if (pdfFile != null) {
+            PdfImport {
+                file = pdfFile
+                onClose = { importing = null }
+                onCreated = { id ->
+                    importing = null
+                    refresh()
+                    selected = id
+                    navigateToDocument(id)
+                }
+            }
+        }
         ReactHTML.div {
             className = ClassName("dash")
 
@@ -134,7 +116,7 @@ val App = FC<Props> {
                         +(if (activeSubject == "all") "All worksheets" else activeSubject)
                     }
 
-                    // mock PDF import: label wraps a hidden file input
+                    // PDF import: label wraps a hidden file input; opens the PdfImport screen
                     ReactHTML.label {
                         className = ClassName("btn-primary")
                         ReactHTML.span { className = ClassName("ph"); +"ph-upload-simple" }
@@ -146,9 +128,8 @@ val App = FC<Props> {
                             onChange = { event ->
                                 val files: dynamic = event.target.asDynamic().files
                                 val first: dynamic = if (files != null) files[0] else null
-                                val name = first?.name as? String
-                                if (name != null) {
-                                    uploadPdfMock(name)
+                                if (first != null) {
+                                    importing = first
                                     event.target.asDynamic().value = ""
                                 }
                             }

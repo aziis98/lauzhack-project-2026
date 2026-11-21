@@ -33,6 +33,8 @@ kotlin {
             // exercise statements: Markdown + LaTeX math
             implementation(npm("marked", "15.0.12"))
             implementation(npm("katex", "0.16.22"))
+            // exercise import: render PDFs and read their text layer in the browser
+            implementation(npm("pdfjs-dist", "6.4.299"))
             // typography + icon fonts
             implementation(npm("@fontsource/open-sans", "5.3.0"))
             implementation(npm("@fontsource/jetbrains-mono", "5.3.0"))

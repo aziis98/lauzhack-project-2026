@@ -4,6 +4,10 @@ import com.lauzhack.shared.agent.PlotWithAnchor
 import com.lauzhack.shared.domain.Document
 import com.lauzhack.shared.domain.Element
 import com.lauzhack.shared.dto.CreateDocumentRequest
+import com.lauzhack.shared.exercise.AssetRef
+import com.lauzhack.shared.exercise.ConvertRegionRequest
+import com.lauzhack.shared.exercise.ConvertRegionResponse
+import com.lauzhack.shared.exercise.UploadAssetRequest
 import com.lauzhack.shared.hint.Hint
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -41,10 +45,27 @@ class DrawingApi(
             null
         }
 
-    suspend fun createDocument(name: String): Document =
+    suspend fun createDocument(name: String, exercise: String = ""): Document =
         client.post("$api/documents") {
             contentType(ContentType.Application.Json)
-            setBody(CreateDocumentRequest(name))
+            setBody(CreateDocumentRequest(name, exercise))
+        }.body()
+
+    /** Converts a region selected on a PDF page into exercise Markdown + LaTeX. */
+    suspend fun convertExerciseRegion(request: ConvertRegionRequest): ConvertRegionResponse {
+        val response = client.post("$api/exercises/convert") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }
+        check(response.status.value in 200..299) { "conversion failed (${response.status.value})" }
+        return response.body()
+    }
+
+    /** Stores a PNG (e.g. a figure cropped from a PDF) and returns its URL. */
+    suspend fun uploadAsset(imagePngBase64: String): AssetRef =
+        client.post("$api/assets") {
+            contentType(ContentType.Application.Json)
+            setBody(UploadAssetRequest(imagePngBase64))
         }.body()
 
     suspend fun getElements(documentId: String): List<Element> =
