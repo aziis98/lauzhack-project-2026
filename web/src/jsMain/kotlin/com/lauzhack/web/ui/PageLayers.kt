@@ -85,12 +85,15 @@ private val ExerciseStatement = FC<Props> {
         ReactHTML.div {
             className = ClassName("exercise-body")
             ref = bodyRef
-            // words and formulas take the click; keep it from starting a stroke
+            // words and formulas take the tap: stop pointerdown so tldraw does not
+            // capture the pointer (or start a stroke), then act on pointerup — iOS
+            // Safari's click synthesis is unreliable inside the canvas (see HintLayer)
             onPointerDown = { e -> if (clickTarget(e.target.asDynamic()) != null) e.stopPropagation() }
-            onClick = { e ->
+            onPointerUp = { e ->
                 val target = clickTarget(e.target.asDynamic())
                 if (target != null) {
                     e.stopPropagation()
+                    e.preventDefault()
                     defineClicked(target)
                 }
             }
