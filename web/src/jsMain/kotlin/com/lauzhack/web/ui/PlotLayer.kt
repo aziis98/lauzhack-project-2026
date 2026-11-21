@@ -65,6 +65,8 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
     val (panelLeft, panelTop) = dragged ?: (btnLeft to btnTop + 44.0)
 
     val fnName = plot.functionName ?: "f"
+    val is3D = plot.variableY != null
+    val panelWidth = if (is3D) PLOT3D_CANVAS_WIDTH + 28.0 else PLOT_PANEL_WIDTH
 
     ReactHTML.button {
         className = ClassName("plot-btn")
@@ -72,9 +74,13 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
         css.left = "${btnLeft}px"
         css.top = "${btnTop}px"
         asDynamic().style = css
+        // never let the canvas see this pointer: tldraw captures the pointer on
+        // canvas pointerdown (useCanvasEvents), which would steal the pointerup
+        // and the click would never complete
+        onPointerDown = { it.stopPropagation() }
         onClick = { open = !open }
         ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
-        +"Plot $fnName(${plot.variable})"
+        +"Plot $fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""})"
     }
 
     if (open) {
@@ -83,14 +89,15 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
             val css: dynamic = js("({})")
             css.left = "${panelLeft}px"
             css.top = "${panelTop}px"
-            css.width = "${PLOT_PANEL_WIDTH}px"
+            css.width = "${panelWidth}px"
             asDynamic().style = css
 
-            // drag the panel like a hint card; its buttons are left alone
+            // drag the panel like a hint card; its buttons and the 3D canvas
+            // (OrbitControls owns pointer gestures there) are left alone
             onPointerDown = { event ->
                 event.stopPropagation() // never start a stroke under the panel
                 val target: dynamic = event.target
-                if (target.closest("button") == null) {
+                if (target.closest("button, canvas") == null) {
                     event.preventDefault()
                     val zoom = canvasEditor?.getZoomLevel() ?: 1.0
                     val startX = event.clientX
@@ -118,18 +125,24 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
                 ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
                 ReactHTML.span {
                     className = ClassName("plot-expr")
-                    +"$fnName(${plot.variable}) = ${plot.expression}"
+                    +"$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""}) = ${plot.expression}"
                 }
                 ReactHTML.button {
                     className = ClassName("hint-close")
                     title = "Close"
                     asDynamic()["aria-label"] = "Close plot"
+                    // keep the canvas from capturing the pointer (see .plot-btn)
+                    onPointerDown = { it.stopPropagation() }
                     onClick = { open = false }
                     +"✕"
                 }
             }
 
-            PlotSvg { this.plot = plot }
+            if (is3D) {
+                Plot3D { this.plot = plot }
+            } else {
+                PlotSvg { this.plot = plot }
+            }
         }
     }
 }
@@ -298,15 +311,18 @@ private val KNOWN_MATH = setOf(
     "pow", "min", "max", "floor", "ceil", "round", "sign", "PI", "E",
 )
 
-/** Whitelist: Math.<known> tokens, the variable, numbers and arithmetic only. */
-internal fun expressionIsSafe(expr: String, variable: String): Boolean {
+/** Whitelist: Math.<known> tokens, the declared variables, numbers and arithmetic only. */
+internal fun expressionIsSafe(expr: String, vararg variables: String): Boolean {
     if (expr.isEmpty() || expr.length > 300) return false
     Regex("""Math\.([A-Za-z]+)""").findAll(expr).forEach {
         if (it.groupValues[1] !in KNOWN_MATH) return false
     }
     val withoutMath = expr.replace(Regex("""Math\.[A-Za-z]+"""), "")
-    val withoutVar = withoutMath.replace(Regex("""\b${Regex.escape(variable)}\b"""), "")
-    if (Regex("""[A-Za-z_$]""").containsMatchIn(withoutVar)) return false
-    if (Regex("""[;={}[\]`'"<>?!&|:,]""").containsMatchIn(withoutVar)) return false
+    var withoutVars = withoutMath
+    for (v in variables) {
+        withoutVars = withoutVars.replace(Regex("""\b${Regex.escape(v)}\b"""), "")
+    }
+    if (Regex("""[A-Za-z_$]""").containsMatchIn(withoutVars)) return false
+    if (Regex("""[;={}[\]`'"<>?!&|:,]""").containsMatchIn(withoutVars)) return false
     return true
 }

@@ -129,6 +129,10 @@ private val HintCardView = FC<HintCardProps> { props ->
                 className = ClassName("hint-close")
                 title = "Close"
                 asDynamic()["aria-label"] = "Close hint"
+                // keep the canvas from capturing the pointer: tldraw's
+                // useCanvasEvents captures on canvas pointerdown, which would
+                // steal the pointerup and the click would never complete
+                onPointerDown = { it.stopPropagation() }
                 onClick = { props.onDismiss() }
                 +"✕"
             }
@@ -151,6 +155,8 @@ private val HintCardView = FC<HintCardProps> { props ->
         if (hint.status != HintStatus.THINKING) {
             ReactHTML.button {
                 className = ClassName("hint-more")
+                // keep the canvas from capturing the pointer (see the close button)
+                onPointerDown = { it.stopPropagation() }
                 onClick = { props.onMore() }
                 ReactHTML.span { className = ClassName("ph"); +"ph-question" }
                 +(if (hint.status == HintStatus.FAILED) "Try again" else "I don't get it — another hint")

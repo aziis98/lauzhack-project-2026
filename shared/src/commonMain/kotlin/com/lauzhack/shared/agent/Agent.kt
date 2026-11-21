@@ -64,9 +64,13 @@ sealed interface AgentAction {
         val id: String = "",
         val functionName: String? = null,
         val variable: String = "x",
+        /** Second independent variable: present → the client renders a 3D surface. */
+        val variableY: String? = null,
         /** JavaScript the client can evaluate directly, e.g. `2*x*Math.sqrt(1-x*x)`. */
         val expression: String,
         val domain: List<PlotInterval> = listOf(PlotInterval(-5.0, 5.0)),
+        /** Range of the second variable (defaults to a square with the x domain). */
+        val domainY: PlotInterval? = null,
         /** The special points the STUDENT computed about this function on the page. */
         val points: List<PlotPoint> = emptyList(),
         /** Withdraw a previously emitted plot with the same id. */
@@ -92,12 +96,15 @@ data class PlotInterval(val from: Double, val to: Double)
  * A point the student computed about a function (zero, critical point, extremum,
  * evaluated value) — extracted from their work by the model, rendered on the plot.
  *
- * @property y null when the student only wrote the x: the client evaluates it
+ * @property y for one-variable plots: the value f(x); for two-variable plots:
+ *   the second input, with [z] as the value
+ * @property z null when the student only wrote the inputs: the client evaluates it
  */
 @Serializable
 data class PlotPoint(
     val x: Double,
     val y: Double? = null,
+    val z: Double? = null,
     val label: String? = null,
 )
 
