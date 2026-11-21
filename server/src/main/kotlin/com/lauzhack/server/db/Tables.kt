@@ -32,3 +32,16 @@ object ElementsTable : Table("elements") {
     val updatedAt = long("updated_at")
     override val primaryKey = PrimaryKey(id)
 }
+
+/**
+ * The page agent's conversation with the model, one row per document: the
+ * model's memory (hints given, mistakes flagged, functions plotted) survives
+ * server restarts, and every document keeps its own conversation.
+ */
+object AgentStateTable : Table("agent_state") {
+    val documentId = varchar("document_id", 128)
+        .references(DocumentsTable.id, onDelete = ReferenceOption.CASCADE)
+    val messages = text("messages")
+    val updatedAt = long("updated_at")
+    override val primaryKey = PrimaryKey(documentId)
+}

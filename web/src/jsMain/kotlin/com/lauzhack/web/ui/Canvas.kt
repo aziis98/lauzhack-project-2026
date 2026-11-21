@@ -162,6 +162,13 @@ private fun onCanvasMount(editor: Editor, documentId: String): (() -> Unit)? {
         // grow the page if stored content extends below the initial height
         growBoundsToContent()
 
+        // Resync on open: with identical content the chunker dedups everything
+        // (no events, no API calls), but after a server restart this re-triggers
+        // chunking so the page flows as a fresh snapshot into the agent's
+        // restored conversation — plots, hints and buttons come back without
+        // the student drawing anything.
+        runCatching { api.replaceElements(documentId, elements) }
+
         // SAVE: batch-replace when content changed (poll every 2.5s)
         var lastPayload: String? = null
         while (isActive) {

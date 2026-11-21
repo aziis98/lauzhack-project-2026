@@ -21,7 +21,7 @@ val jsonConfig = Json {
 fun initDatabase() {
     Database.connect("jdbc:sqlite:data.db", driver = "org.sqlite.JDBC")
     transaction {
-        SchemaUtils.create(DocumentsTable, ElementsTable, AssetsTable)
+        SchemaUtils.create(DocumentsTable, ElementsTable, AssetsTable, AgentStateTable)
     }
     // Databases created before the exercise column existed: add it (fails harmlessly if present).
     runCatching {
