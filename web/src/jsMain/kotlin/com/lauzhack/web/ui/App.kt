@@ -50,49 +50,16 @@ val App = FC<Props> {
 
     val openId = selected
 
-    ReactHTML.div {
-        className = ClassName("page")
+    if (openId == null) {
+        // ---------------- home: vertical scrolling document of cards ----------------
+        ReactHTML.div {
+            className = ClassName("page")
 
-        // ------- sticky top bar -------
-        ReactHTML.header {
-            className = ClassName("topbar")
-
-            if (openId == null) {
-                ReactHTML.div {
-                    className = ClassName("title")
-                    +"Lauzhack Draw"
-                }
-                ReactHTML.div { className = ClassName("grow") }
-                ReactHTML.span {
-                    className = ClassName("status")
-                    +"Kotlin · SQLite · tldraw"
-                }
-            } else {
-                ReactHTML.button {
-                    className = ClassName("ghost")
-                    +"←"
-                    onClick = { _ ->
-                        selected = null
-                        activeEditor = null
-                        savedAt = null
-                    }
-                }
-                ReactHTML.div {
-                    className = ClassName("title")
-                    val doc = documents?.find { it.id == openId }
-                    +(doc?.name ?: "Drawing")
-                }
-                Toolbar { editor = activeEditor }
-                ReactHTML.div { className = ClassName("grow") }
-                ReactHTML.span {
-                    className = ClassName("status")
-                    +(savedAt?.let { "Saved $it" } ?: "Not saved yet")
-                }
+            TopBar {
+                title = "Lauzhack Draw"
+                subtitle = "Kotlin · SQLite · tldraw"
             }
-        }
 
-        if (openId == null) {
-            // ------- home: documents as cards -------
             ReactHTML.section {
                 className = ClassName("card card-pad")
                 ReactHTML.div {
@@ -146,29 +113,30 @@ val App = FC<Props> {
                     }
                 }
             }
-        } else {
-            // ------- drawing: canvas card in the scrolling document -------
-            ReactHTML.section {
-                className = ClassName("card canvas-card")
-                ReactHTML.div {
-                    className = ClassName("canvas-fill")
-                    Canvas {
-                        documentId = openId
-                        onReady = { activeEditor = it }
-                        onSaved = { savedAt = nowTime() }
-                    }
+        }
+    } else {
+        // ---------------- drawing: full-page canvas with floating toolbar ----------------
+        ReactHTML.div {
+            className = ClassName("fullscreen-page")
+
+            TopBar {
+                title = documents?.find { it.id == openId }?.name ?: "Drawing"
+                subtitle = savedAt?.let { "Saved $it" } ?: "Not saved yet"
+                editor = activeEditor
+                showTools = true
+                onBack = {
+                    selected = null
+                    activeEditor = null
+                    savedAt = null
                 }
             }
 
-            ReactHTML.section {
-                className = ClassName("card card-pad about")
-                ReactHTML.h2 { +"About this drawing" }
-                ReactHTML.p {
-                    className = ClassName("muted")
-                    +"Changes autosave to the Kotlin backend every 2.5 seconds and are stored as "
-                    +"tool-agnostic elements (strokes, geometry, text, arrows) in SQLite. "
-                    +"Minimap, zoom controls and menus are intentionally hidden — use the toolbar above. "
-                    +"Keyboard shortcuts still work (V, D, E, R, A, T)."
+            ReactHTML.div {
+                className = ClassName("canvas-fill")
+                Canvas {
+                    documentId = openId
+                    onReady = { activeEditor = it }
+                    onSaved = { savedAt = nowTime() }
                 }
             }
         }
