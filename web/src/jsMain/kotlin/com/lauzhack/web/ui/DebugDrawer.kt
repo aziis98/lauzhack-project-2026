@@ -348,21 +348,32 @@ private val DebugOcrSection = FC<DebugOcrSectionProps> { props ->
                         }
                     }
 
-                    // images
-                    if (props.showPrompts) {
+                    // Images have their own spoiler, independent of prompt visibility.
+                    ReactHTML.details {
+                        className = ClassName("debug-raw")
+                        ReactHTML.summary { +"Images sent to OCR" }
                         ReactHTML.div {
                             className = ClassName("debug-images")
-                            ReactHTML.img {
-                                className = ClassName("debug-img")
-                                src = "/api/documents/${props.documentId}/chunks/${chunk.chunkId}/image.png"
-                                alt = "chunk raster"
-                            }
-                            ReactHTML.img {
-                                className = ClassName("debug-img")
-                                src = "/api/documents/${props.documentId}/chunks/${chunk.chunkId}/annotated.png"
-                                alt = "segmentation"
+                            for ((file, caption) in listOf(
+                                "image.png" to "Raw chunk",
+                                "washed.png" to "OCR input (gray bbox backgrounds)",
+                                "annotated.png" to "Segmentation preview",
+                            )) {
+                                ReactHTML.figure {
+                                    className = ClassName("debug-image-preview")
+                                    key = Key(file)
+                                    ReactHTML.figcaption { +caption }
+                                    ReactHTML.img {
+                                        className = ClassName("debug-img")
+                                        src = "/api/documents/${props.documentId}/chunks/${chunk.chunkId}/$file"
+                                        alt = caption
+                                        asDynamic().loading = "lazy"
+                                    }
+                                }
                             }
                         }
+                    }
+                    if (props.showPrompts) {
                         DebugCollapsiblePrompt {
                             title = "prompt sent to the model"
                             content = chunk.userText
@@ -481,6 +492,25 @@ private external interface DebugAssistantActionsProps : Props {
     var content: String
 }
 
+private external interface DebugConversationMathProps : Props {
+    var content: String
+    var mathOnly: Boolean?
+}
+
+/** Render complete conversation text; bare MATH chunks need display delimiters. */
+private val DebugConversationMath = FC<DebugConversationMathProps> { props ->
+    val clean = props.content.stripBboxes()
+        .replace("\\[", "$$").replace("\\]", "$$")
+        .replace("\\(", "$").replace("\\)", "$")
+    val source = if (props.mathOnly == true && '$' !in clean) "$$\n$clean\n$$" else clean
+    ReactHTML.div {
+        className = ClassName("debug-conversation-math")
+        val inner: dynamic = js("({})")
+        inner.__html = renderMathMarkdown(source)
+        asDynamic().dangerouslySetInnerHTML = inner
+    }
+}
+
 private val DebugAssistantActions = FC<DebugAssistantActionsProps> { props ->
     val parsed: dynamic = try {
         JSON.parse(props.content)
@@ -510,12 +540,14 @@ private val DebugAssistantActions = FC<DebugAssistantActionsProps> { props ->
                             ReactHTML.span { className = ClassName("ph"); +"ph-lightbulb" }
                             +"HINT · ${action.id ?: ""}"
                         }
-                        if (action.title != null) ReactHTML.p { +(action.title.toString()) }
-                        if (action.message != null) ReactHTML.p { +(action.message.toString()) }
+                        if (action.title != null) DebugConversationMath { content = action.title.toString() }
+                        if (action.message != null) DebugConversationMath { content = action.message.toString() }
                         val steps = action.steps as? Array<dynamic>
                         if (steps != null && steps.isNotEmpty()) {
                             ReactHTML.ul {
-                                for (s in steps) ReactHTML.li { +(s.toString()) }
+                                for (s in steps) ReactHTML.li {
+                                    DebugConversationMath { content = s.toString() }
+                                }
                             }
                         }
                     }
@@ -525,9 +557,9 @@ private val DebugAssistantActions = FC<DebugAssistantActionsProps> { props ->
                             ReactHTML.span { className = ClassName("ph"); +"ph-chart-line" }
                             +"PLOT · ${action.id ?: ""}"
                         }
-                        ReactHTML.p {
-                            className = ClassName("mono")
-                            +"${action.functionName ?: "?"}(${action.variable ?: "x"}) = ${action.expression ?: "?"}"
+                        DebugConversationMath {
+                            content = "${action.functionName ?: "?"}(${action.variable ?: "x"}) = ${action.expression ?: "?"}"
+                            mathOnly = true
                         }
                         val domain = action.domain as? Array<dynamic>
                         if (domain != null && domain.isNotEmpty()) {
@@ -544,11 +576,11 @@ private val DebugAssistantActions = FC<DebugAssistantActionsProps> { props ->
                             +"ERROR · ${action.id ?: ""}"
                         }
                         if (action.chunkId != null) ReactHTML.p { +"chunk: ${action.chunkId}" }
-                        if (action.message != null) ReactHTML.p { +(action.message.toString()) }
+                        if (action.message != null) DebugConversationMath { content = action.message.toString() }
                         if (action.suggestion != null) {
-                            ReactHTML.p {
+                            ReactHTML.div {
                                 className = ClassName("debug-action-meta")
-                                +(action.suggestion.toString())
+                                DebugConversationMath { content = action.suggestion.toString() }
                             }
                         }
                     }
@@ -604,7 +636,7 @@ private val DebugPageOrDelta = FC<DebugPageOrDeltaProps> { props ->
         if (exerciseText.isNotBlank()) {
             ReactHTML.div {
                 className = ClassName("debug-exercise-tag")
-                +"exercise: ${exerciseText.take(80)}…"
+                DebugConversationMath { content = exerciseText }
             }
         }
     }
@@ -630,9 +662,12 @@ private val DebugPageOrDelta = FC<DebugPageOrDeltaProps> { props ->
                         className = ClassName("mono")
                         +"${chunk.id ?: "?"}"
                     }
-                    ReactHTML.span {
+                    ReactHTML.div {
                         className = ClassName("debug-chunk-content")
-                        +(chunk.content?.toString()?.take(60) ?: "")
+                        DebugConversationMath {
+                            content = chunk.content?.toString() ?: ""
+                            mathOnly = chunk.kind?.toString() == "MATH"
+                        }
                     }
                 }
             }

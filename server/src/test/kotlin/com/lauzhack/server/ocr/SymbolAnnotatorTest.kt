@@ -6,6 +6,8 @@ import com.lauzhack.shared.domain.ElementData
 import com.lauzhack.shared.domain.Segment
 import com.lauzhack.shared.domain.Style
 import com.lauzhack.shared.ocr.stripBboxes
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -71,6 +73,36 @@ class SymbolAnnotatorTest {
         val png = rasterizer.render(bounds, listOf(stroke(50.0, 100.0, 150.0, 100.0)))
         val annotated = annotator.renderAnnotated(png, annotator.annotate(png))
         assertTrue(annotated.size > png.size, "annotation should add pixels, not shrink the image")
+    }
+
+    @Test
+    fun bboxBackgroundTintsPaperButKeepsInk() {
+        val png = rasterizer.render(bounds, listOf(stroke(50.0, 100.0, 150.0, 100.0)))
+        val fragments = annotator.annotate(png)
+        assertTrue(fragments.isNotEmpty(), "expected a fragment")
+        val f = fragments[0]
+
+        val before = ImageIO.read(ByteArrayInputStream(png))
+        val after = ImageIO.read(ByteArrayInputStream(annotator.renderBboxBackground(png, fragments)))
+
+        // just above the tight bbox (inside the 2px wash margin): paper becomes gray
+        val px = f.minX + f.width / 2
+        val py = f.minY - 1
+        assertEquals(0xFFFFFF, before.getRGB(px, py) and 0xFFFFFF, "expected white paper before the wash")
+        assertEquals(0xEDEDED, after.getRGB(px, py) and 0xFFFFFF, "expected light gray behind the bbox")
+
+        // the ink inside the bbox stays dark
+        val cy = f.minY + f.height / 2
+        val inkLum = lum(after, px, cy)
+        assertTrue(inkLum < 120, "expected dark ink inside the bbox, got luminance $inkLum")
+
+        // far from the fragment the paper is untouched
+        assertEquals(0xFFFFFF, after.getRGB(0, 0) and 0xFFFFFF, "paper outside the bbox must stay white")
+    }
+
+    private fun lum(image: java.awt.image.BufferedImage, x: Int, y: Int): Int {
+        val rgb = image.getRGB(x, y)
+        return ((rgb shr 16 and 0xff) + (rgb shr 8 and 0xff) + (rgb and 0xff)) / 3
     }
 
     @Test

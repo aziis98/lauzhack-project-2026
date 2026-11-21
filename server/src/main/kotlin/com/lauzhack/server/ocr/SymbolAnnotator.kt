@@ -122,6 +122,50 @@ class SymbolAnnotator(
         }
     }
 
+    /**
+     * The chunk image with a light gray wash behind each fragment's bbox, given to
+     * the OCR model: the ink stays dark on top, but every symbol sits on its own
+     * gray patch, visually tying the region to the coordinates in the prompt.
+     *
+     * Only the paper (pixels lighter than [paperThreshold]) is tinted, so the
+     * glyph silhouette and its anti-aliased edges are preserved.
+     */
+    fun renderBboxBackground(
+        png: ByteArray,
+        fragments: List<SymbolFragment>,
+        padding: Int = 2,
+        background: Int = 0xEDEDED,
+        paperThreshold: Int = 200,
+    ): ByteArray {
+        if (fragments.isEmpty()) return png
+        val original = runCatching { ImageIO.read(ByteArrayInputStream(png)) }.getOrNull()
+            ?: return png
+        val image = BufferedImage(original.width, original.height, BufferedImage.TYPE_INT_RGB)
+        val g = image.createGraphics()
+        try {
+            g.drawImage(original, 0, 0, null)
+        } finally {
+            g.dispose()
+        }
+        for (f in fragments) {
+            val x0 = (f.minX - padding).coerceAtLeast(0)
+            val y0 = (f.minY - padding).coerceAtLeast(0)
+            val x1 = (f.maxX + padding).coerceAtMost(image.width - 1)
+            val y1 = (f.maxY + padding).coerceAtMost(image.height - 1)
+            for (y in y0..y1) {
+                for (x in x0..x1) {
+                    val rgb = image.getRGB(x, y)
+                    val lum = ((rgb shr 16 and 0xff) + (rgb shr 8 and 0xff) + (rgb and 0xff)) / 3
+                    if (lum >= paperThreshold) image.setRGB(x, y, background)
+                }
+            }
+        }
+        return ByteArrayOutputStream().use { out ->
+            ImageIO.write(image, "png", out)
+            out.toByteArray()
+        }
+    }
+
     private companion object {
         val PALETTE = listOf(
             Color(0xE63946), // red

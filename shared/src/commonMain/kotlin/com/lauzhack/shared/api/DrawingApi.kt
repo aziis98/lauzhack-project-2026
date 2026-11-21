@@ -1,5 +1,6 @@
 package com.lauzhack.shared.api
 
+import com.lauzhack.shared.agent.ErrorMark
 import com.lauzhack.shared.agent.PlotWithAnchor
 import com.lauzhack.shared.debug.DebugPayload
 import com.lauzhack.shared.domain.Document
@@ -102,6 +103,10 @@ class DrawingApi(
     /** The plots the page agent currently proposes for the document. */
     suspend fun getPlots(documentId: String): List<PlotWithAnchor> =
         client.get("$api/documents/$documentId/plots").body()
+
+    /** The error marks (red highlights) the page agent currently flags for the document. */
+    suspend fun getErrors(documentId: String): List<ErrorMark> =
+        client.get("$api/documents/$documentId/errors").body()
 
     /** Asks for a hint without drawing a circled "?" (toolbar button). */
     suspend fun requestHint(documentId: String): Boolean =

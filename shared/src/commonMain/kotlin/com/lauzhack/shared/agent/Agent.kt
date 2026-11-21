@@ -79,7 +79,7 @@ sealed interface AgentAction {
         val remove: Boolean = false,
     ) : AgentAction
 
-    /** A clear mathematical mistake in the student's work. */
+    /** A clear mathematical mistake in the student's work, at a specific symbol. */
     @Serializable
     @SerialName("error")
     data class ErrorAction(
@@ -87,6 +87,18 @@ sealed interface AgentAction {
         val chunkId: String,
         val message: String,
         val suggestion: String? = null,
+        /**
+         * The exact symbol to flag (e.g. `"="`, `"3"`), copied from the symbol's
+         * `\bbox` marker. Shown in the popup title; purely descriptive.
+         */
+        val symbol: String? = null,
+        /**
+         * Bounds of the offending symbol in the CHUNK IMAGE's pixel space,
+         * `[minX, minY, maxX, maxY]`, copied VERBATIM from the symbol's `\bbox`
+         * marker in the chunk's content. The server maps it back to page
+         * coordinates for the red overlay; when empty, the whole chunk is marked.
+         */
+        val bbox: List<Int> = emptyList(),
         val remove: Boolean = false,
     ) : AgentAction
 }
@@ -127,6 +139,23 @@ data class PlotPoint(
 data class PlotWithAnchor(
     val plot: AgentAction.PlotAction,
     val anchor: com.lauzhack.shared.chunking.BoundingBox? = null,
+)
+
+/**
+ * An error action with its highlight resolved to PAGE coordinates: the client
+ * draws a red box over [bounds] and shows [message] in a popup.
+ *
+ * @property bounds the flagged symbol in page coordinates (the whole chunk when
+ *   the model gave no bbox)
+ */
+@Serializable
+data class ErrorMark(
+    val id: String,
+    val chunkId: String,
+    val bounds: com.lauzhack.shared.chunking.BoundingBox,
+    val message: String,
+    val suggestion: String? = null,
+    val symbol: String? = null,
 )
 
 /** One stored turn of the per-document conversation. */

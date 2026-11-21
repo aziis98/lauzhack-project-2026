@@ -2,15 +2,18 @@ package com.lauzhack.server.agent
 
 import com.lauzhack.server.db.AgentStateDao
 import com.lauzhack.server.hint.HintService
+import com.lauzhack.server.ocr.ChunkRasterizer
 import com.lauzhack.server.ocr.OcrService
 import com.lauzhack.server.ocr.TranscriptionEvent
 import com.lauzhack.shared.agent.AgentAction
 import com.lauzhack.shared.agent.AgentOutput
 import com.lauzhack.shared.agent.ConversationMessage
+import com.lauzhack.shared.agent.ErrorMark
 import com.lauzhack.shared.agent.PageChunk
 import com.lauzhack.shared.agent.PageDelta
 import com.lauzhack.shared.agent.PageSnapshot
 import com.lauzhack.shared.agent.PlotWithAnchor
+import com.lauzhack.shared.chunking.BoundingBox
 import com.lauzhack.shared.hint.HintCard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -262,7 +265,30 @@ class AgentService(
                     }
                 }
 
-                is AgentAction.ErrorAction -> Unit // not rendered yet
+                is AgentAction.ErrorAction -> {
+                    if (action.remove) {
+                        removeError(documentId, action.id)
+                        log.info("doc {}: error {} withdrawn", documentId, action.id)
+                    } else {
+                        val chunk = byId[action.chunkId] ?: continue
+                        val bounds = toPageBounds(chunk.chunk.bounds, action.bbox)
+                        putError(
+                            documentId,
+                            ErrorMark(
+                                id = action.id.ifBlank { "error-${action.chunkId}" },
+                                chunkId = action.chunkId,
+                                bounds = bounds,
+                                message = action.message.trim(),
+                                suggestion = action.suggestion?.trim()?.takeIf { it.isNotEmpty() },
+                                symbol = action.symbol?.trim()?.takeIf { it.isNotEmpty() },
+                            ),
+                        )
+                        log.info(
+                            "doc {}: error {} on {} at {}",
+                            documentId, action.id, action.symbol ?: action.chunkId, bounds,
+                        )
+                    }
+                }
             }
         }
     }
@@ -301,6 +327,7 @@ class AgentService(
     fun forget(documentId: String) {
         docs.remove(documentId)?.job?.cancel()
         synchronized(plotRegistry) { plotRegistry.remove(documentId) }
+        synchronized(errorRegistry) { errorRegistry.remove(documentId) }
     }
 
     // ---------------------------------------------------------------
@@ -352,4 +379,32 @@ class AgentService(
 
     private fun removePlot(documentId: String, id: String) =
         synchronized(plotRegistry) { plotRegistry[documentId]?.remove(id) }
+
+    // ---------------------------------------------------------------
+    // Errors: red highlights on the student's mistakes (add/replace by id,
+    // remove-aware), like plots. `apply` resolves the model's image-pixel
+    // bbox to page coordinates so the client can draw it directly.
+    // ---------------------------------------------------------------
+
+    private val rasterizer = ChunkRasterizer()
+    private val errorRegistry = java.util.concurrent.ConcurrentHashMap<String, LinkedHashMap<String, ErrorMark>>()
+
+    /** The error marks currently active for the document, in answer order. */
+    fun errors(documentId: String): List<ErrorMark> =
+        synchronized(errorRegistry) { errorRegistry[documentId]?.values?.toList() ?: emptyList() }
+
+    private fun putError(documentId: String, entry: ErrorMark) =
+        synchronized(errorRegistry) { errorRegistry.getOrPut(documentId) { LinkedHashMap() }[entry.id] = entry }
+
+    private fun removeError(documentId: String, id: String) =
+        synchronized(errorRegistry) { errorRegistry[documentId]?.remove(id) }
+
+    /** The model's image-pixel bbox mapped back to page coordinates (the whole chunk when absent). */
+    private fun toPageBounds(chunkBounds: BoundingBox, bbox: List<Int>): BoundingBox {
+        if (bbox.size != 4) return chunkBounds
+        val (scale, padding) = rasterizer.rasterParams(chunkBounds)
+        fun x(img: Int) = chunkBounds.minX + (img - padding) / scale
+        fun y(img: Int) = chunkBounds.minY + (img - padding) / scale
+        return BoundingBox(x(bbox[0]), y(bbox[1]), x(bbox[2]), y(bbox[3]))
+    }
 }

@@ -64,6 +64,13 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
     - MATH content is LaTeX; TEXT is prose with ${'$'}inline math${'$'}; DRAWING content is a
       description of the sketch; HINT_REQUEST is a circled "?" — the student asking for
       help; UNREADABLE means the transcription failed.
+    - MATH and TEXT content wrap EACH transcribed symbol in a position marker:
+      \bbox[minX,minY,maxX,maxY]{symbol} — the coordinates are in the CHUNK IMAGE's
+      pixel space (origin top-left, y grows down), taken from image segmentation.
+      Example content:
+      "\bbox[16,16,150,168]{x} \bbox[256,74,343,184]{+} \bbox[128,96,226,162]{1}".
+      This is how you point at a SPECIFIC symbol (see the ERROR action); copy the
+      numbers VERBATIM, never invent or alter a coordinate.
     - Your previous answers are part of the conversation. Treat them as COMMITMENTS:
       hints you gave, functions you plotted, mistakes you flagged. As the page changes,
       keep them consistent: replace what changed, withdraw what disappeared.
@@ -138,8 +145,27 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
 
     3. ERROR — a clear mathematical mistake in the student's work.
        { "kind": "error", "id": "error-<n>", "chunkId": "<the chunk with the mistake>",
-         "message": "what is wrong, 1-2 sentences", "suggestion": "optional nudge" }
+         "message": "what is wrong, 1-2 sentences", "suggestion": "optional nudge",
+         "symbol": "=", "bbox": [minX,minY,maxX,maxY] }
 
+       - Flag the SPECIFIC symbol that is wrong — a wrong sign, operator, digit or value —
+         not the whole step. Put that symbol's text in "symbol" and copy its \bbox
+         coordinates VERBATIM into "bbox" (four integers, same order as the marker).
+         Example: if "\bbox[148,44,190,66]{=}" should have been "<", return
+         "symbol": "=", "bbox": [148,44,190,66]. This is what the app underlines in red.
+       - For a WRONG CALCULATION — the result or a whole side is wrong (2 + 2 = 5,
+         (x + y)² = x² + y²) — prefer the RELATION symbol that joins the two sides,
+         usually the "=" (or "<", "≥", "≠", whichever was written). Anchor the red
+         mark on that connecting symbol instead of picking an arbitrary symbol from the
+         input. Only point at an input symbol when THAT symbol is itself wrong (a wrong
+         sign, operator or digit inside the expression).
+       - "bbox" is REQUIRED and must NEVER be empty: you MUST return four integers taken
+         from \bbox markers in the chunk's content. When the mistake spans several
+         symbols, return the union of their markers — "bbox" = [smallest minX, smallest
+         minY, largest maxX, largest maxY] among those symbols. When it is unclear which
+         symbol is wrong, still return the marker of the symbol nearest or most relevant
+         to the mistake. If no marker fits at all, pick the closest one by position.
+         There is no valid error action without a bbox.
        - Only mistakes you are SURE about (wrong sign, wrong derivative, wrong
          arithmetic), only in COMPLETE expressions — never mid-writing, never
          ambiguous strokes, never stylistic preferences. At most one error per turn.
@@ -238,6 +264,18 @@ class KoogPageAgent(
                         message = "2x·√(1−x²) is a product of two functions: which rule do you use to derive f·g?",
                         steps = listOf("What are f(x) and g(x) here?"),
                         relatedChunkIds = listOf("chunk-3"),
+                    )
+                )
+            ),
+            AgentOutput(
+                listOf(
+                    AgentAction.ErrorAction(
+                        id = "error-1",
+                        chunkId = "chunk-3",
+                        message = "The derivative of x³ is 3x², not 3x.",
+                        suggestion = "Re-apply the power rule to the x³ term.",
+                        symbol = "3x",
+                        bbox = listOf(148, 44, 190, 66),
                     )
                 )
             ),

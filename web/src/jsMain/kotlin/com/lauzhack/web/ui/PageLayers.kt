@@ -43,6 +43,7 @@ val PageOverlay = FC<Props> {
     ExerciseStatement()
     HintLayer()
     PlotLayer()
+    ErrorLayer()
     if (debugMode) DebugLayer()
 }
 

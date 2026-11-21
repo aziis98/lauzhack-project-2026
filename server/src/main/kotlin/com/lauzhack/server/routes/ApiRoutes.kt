@@ -115,6 +115,17 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
                 call.respondBytes(annotator.renderAnnotated(png, annotator.annotate(png)), ContentType.Image.PNG)
             }
 
+            // The chunk image exactly as sent to the OCR model: light gray behind each bbox; debug/inspection.
+            get("chunks/{cid}/washed.png") {
+                val id = call.parameters["id"]!!
+                val chunk = chunkOf(id, call.parameters["cid"])
+                    ?: return@get call.respond(HttpStatusCode.NotFound)
+                val png = chunkPng(id, chunk)
+                val annotator = SymbolAnnotator()
+                val fragments = annotator.annotate(png)
+                call.respondBytes(annotator.renderBboxBackground(png, fragments), ContentType.Image.PNG)
+            }
+
             // Wire-level debug view: agent conversation, OCR prompts, chunks, hints (?debug mode).
             get("debug") {
                 val id = call.parameters["id"]!!

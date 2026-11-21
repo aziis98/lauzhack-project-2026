@@ -48,7 +48,9 @@ internal val OCR_SYSTEM_PROMPT = """
 
     The message also lists the symbol fragments detected in the image, as
     (minx,miny,maxx,maxy) in image pixel space, in reading order. Each fragment is one
-    connected handwriting blob (strokes of the same symbol are already merged).
+    connected handwriting blob (strokes of the same symbol are already merged). In the
+    image each fragment's region is shaded light gray behind the ink, so you can match a
+    symbol to its coordinates.
 
     Fill `content` with markdown + LaTeX using this AUGMENTED syntax: wrap every symbol
     you transcribe in a bbox marker, e.g.:
