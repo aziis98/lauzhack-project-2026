@@ -15,8 +15,8 @@ import kotlin.math.roundToInt
 data class HintContext(
     /** All chunks of the page in reading order, with their transcriptions. */
     val page: List<TranscribedChunk>,
-    /** The chunk holding the circled "?". */
-    val trigger: TranscribedChunk,
+    /** The chunk holding the circled "?"; null when the student used the Help button. */
+    val trigger: TranscribedChunk?,
     /** Hints already given on this page, oldest first (to make the next one more explicit). */
     val previousHints: List<HintCard>,
     /** Exercise statement (Markdown + LaTeX); empty when the page has none. */
@@ -77,7 +77,7 @@ class KoogHintAgent(
                 append(" y=").append(b.minY.roundToInt()).append("..").append(b.maxY.roundToInt()).append("  ")
                 val t = tc.transcription
                 when {
-                    tc.chunk.id == context.trigger.chunk.id -> append("<< CIRCLED ? — the student asks for help HERE >>")
+                    tc.chunk.id == context.trigger?.chunk?.id -> append("<< CIRCLED ? — the student asks for help HERE >>")
                     t == null -> append("(not transcribed yet)")
                     t.kind == ChunkKind.HINT_REQUEST -> append("(older circled ?)")
                     t.content.isBlank() -> append(t.kind.name)
@@ -92,7 +92,11 @@ class KoogHintAgent(
                 appendLine("The student is still asking: be a bit more concrete than before, without solving it for them.")
             }
             appendLine()
-            append("Give ONE hint for the step the student is stuck on, i.e. the work closest to (mostly above or left of) the circled ?.")
+            if (context.trigger != null) {
+                append("Give ONE hint for the step the student is stuck on, i.e. the work closest to (mostly above or left of) the circled ?.")
+            } else {
+                append("The student pressed the Help button (no circled ?). Give ONE hint for the step they are on now: the most recent work, usually the lowest blocks on the page; if the page is empty, help them start the exercise.")
+            }
         }
 
         private val EXAMPLES = listOf(

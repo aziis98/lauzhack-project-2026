@@ -578,6 +578,11 @@ input:focus {
 .hint-card {
 	position: absolute;
 	pointer-events: all;
+	/* above every stroke (shapes share the layer and carry their own z-index) */
+	z-index: 2147483000;
+	cursor: grab;
+	user-select: none;
+	touch-action: none;
 	box-sizing: border-box;
 	padding: 12px 14px;
 	border-radius: 14px;
@@ -589,6 +594,7 @@ input:focus {
 	line-height: 1.45;
 	animation: hint-in 180ms ease-out;
 }
+.hint-card:active { cursor: grabbing; }
 
 .hint-card.hint-failed { background: #fef2f2; border-color: #fca5a5; }
 
@@ -598,16 +604,24 @@ input:focus {
 .hint-title { flex: 1; font-weight: 600; }
 
 .hint-close {
-	border: none;
-	background: none;
-	cursor: pointer;
-	padding: 2px;
-	color: var(--muted);
-	display: flex;
-	border-radius: 6px;
+	color: #fff !important; background: #e03131 !important;
+	border: var(--line) !important; border-radius: 6px;
+	box-shadow: var(--hard-sm); width: 28px; height: 28px; justify-content: center; align-items: center;
+	font-size: 15px; font-weight: 800; line-height: 1; display: flex; cursor: pointer;
 }
+.hint-close:hover { background: #c92a2a !important; }
+.hint-close:active { transform: translate(2px, 2px); box-shadow: none; }
 
-.hint-close:hover { background: rgba(0, 0, 0, 0.06); color: var(--text); }
+.hint-more {
+	margin-top: 10px; width: 100%; display: flex; gap: 6px; align-items: center; justify-content: center;
+	padding: 7px 10px; font-weight: 600; font-size: 13px;
+	background: #fff; border: var(--line); border-radius: 8px; box-shadow: var(--hard-sm);
+	cursor: pointer;
+}
+.hint-more:hover { background: var(--lilac); }
+.hint-more:active { transform: translate(2px, 2px); box-shadow: none; }
+
+.tool.help { background: var(--lilac); border: var(--line); font-weight: 800; }
 
 .hint-message { margin: 8px 0 0; }
 .hint-steps { margin: 6px 0 0; padding-left: 18px; color: #52525b; }

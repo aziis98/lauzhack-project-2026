@@ -9,6 +9,7 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -66,6 +67,21 @@ class DrawingApi(
     /** Hints answering the circled "?" drawn on the page. */
     suspend fun getHints(documentId: String): List<Hint> =
         client.get("$api/documents/$documentId/hints").body()
+
+    /** Asks for a hint without drawing a circled "?" (toolbar button). */
+    suspend fun requestHint(documentId: String): Boolean =
+        client.post("$api/documents/$documentId/hints").status.value in 200..299
+
+    /** "Another hint" for a card the student did not understand. */
+    suspend fun moreHint(documentId: String, hintId: String): Boolean =
+        client.post("$api/documents/$documentId/hints/$hintId/more").status.value in 200..299
+
+    /** Saves where the card was dragged (page coordinates). */
+    suspend fun moveHint(documentId: String, hintId: String, x: Double, y: Double): Boolean =
+        client.patch("$api/documents/$documentId/hints/$hintId/position") {
+            contentType(ContentType.Application.Json)
+            setBody(com.lauzhack.shared.domain.Point(x, y))
+        }.status.value in 200..299
 
     suspend fun dismissHint(documentId: String, hintId: String): Boolean =
         client.delete("$api/documents/$documentId/hints/$hintId").status.value in 200..299

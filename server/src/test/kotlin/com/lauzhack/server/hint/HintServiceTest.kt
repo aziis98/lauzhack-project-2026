@@ -62,7 +62,7 @@ class HintServiceTest {
         assertEquals("chunk-2", hint.triggerChunkId)
         assertEquals("Hint 1", hint.card?.title)
         val ctx = contexts.single()
-        assertEquals("chunk-2", ctx.trigger.chunk.id)
+        assertEquals("chunk-2", ctx.trigger?.chunk?.id)
         assertEquals(2, ctx.page.size)
     }
 
@@ -149,5 +149,40 @@ class HintServiceTest {
         val text = KoogHintAgent.describe(HintContext(listOf(work, circled), circled, emptyList()))
         assertTrue("[chunk-1] x=0..100 y=0..40  MATH: A(x)=2x\\sqrt{1-x^2}" in text, text)
         assertTrue("[chunk-2] x=0..100 y=100..140  << CIRCLED ?" in text, text)
+    }
+
+    @Test
+    fun helpButtonAsksWithoutTriggerNextToTheLowestWork() = runBlocking {
+        val hints = service()
+        page = listOf(work)
+        val hint = hints.request("doc")!!
+        assertEquals(null, hint.triggerChunkId)
+        assertEquals(work.chunk.bounds, hint.anchor)
+        delay(200)
+        assertEquals(null, contexts.single().trigger)
+        assertEquals(HintStatus.READY, hints.hints("doc").single().status)
+    }
+
+    @Test
+    fun anotherHintKeepsTheBoxAndPassesWhatWasSaid() = runBlocking {
+        val hints = service()
+        page = listOf(work, circled)
+        hints.handle(updated(circled))
+        delay(150)
+        val id = hints.hints("doc").single().id
+        hints.move("doc", id, com.lauzhack.shared.domain.Point(10.0, 20.0))
+        hints.more("doc", id)
+        delay(150)
+        val hint = hints.hints("doc").single()
+        assertEquals("Hint 2", hint.card?.title)
+        assertEquals(listOf("Hint 1"), hint.history.map { it.title })
+        assertEquals(listOf("Hint 1"), contexts[1].previousHints.map { it.title })
+        assertEquals(com.lauzhack.shared.domain.Point(10.0, 20.0), hint.position)
+    }
+
+    @Test
+    fun positionIsNeverInTheAgentPrompt() {
+        val text = KoogHintAgent.describe(HintContext(listOf(work, circled), circled, emptyList()))
+        assertTrue("position" !in text)
     }
 }

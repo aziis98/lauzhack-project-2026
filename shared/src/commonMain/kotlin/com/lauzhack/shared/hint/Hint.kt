@@ -1,6 +1,7 @@
 package com.lauzhack.shared.hint
 
 import com.lauzhack.shared.chunking.BoundingBox
+import com.lauzhack.shared.domain.Point
 import kotlinx.serialization.Serializable
 
 /**
@@ -25,17 +26,22 @@ enum class HintStatus { THINKING, READY, FAILED }
 /**
  * A help request and its answer.
  *
- * @property triggerChunkId the chunk holding the circled "?"
+ * @property triggerChunkId the chunk holding the circled "?"; null when asked with the toolbar button
  * @property anchor page-space bounds of the trigger, used to place the card
  * @property card null until [status] is [HintStatus.READY]
+ * @property history earlier cards shown in this box ("another hint"), oldest first
+ * @property position page-space top-left of the card once the student dragged it;
+ *   UI state only, never sent to the AI
  */
 @Serializable
 data class Hint(
     val id: String,
-    val triggerChunkId: String,
+    val triggerChunkId: String?,
     val anchor: BoundingBox,
     val status: HintStatus,
     val card: HintCard? = null,
     val error: String? = null,
     val createdAt: Long = 0L,
+    val history: List<HintCard> = emptyList(),
+    val position: Point? = null,
 )

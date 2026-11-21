@@ -197,6 +197,7 @@ val Canvas = FC<CanvasProps> { props ->
         options = singlePageOptions()
         onMount = { editor ->
             props.onReady?.invoke(editor)
+            canvasEditor = editor
             onCanvasMount(editor, props.documentId)
         }
     }

@@ -1,6 +1,9 @@
 package com.lauzhack.web.ui
 
+import com.lauzhack.shared.api.DrawingApi
 import com.lauzhack.web.tldraw.DefaultColorStyle
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 import com.lauzhack.web.tldraw.Editor
 import react.ChildrenBuilder
 import react.FC
@@ -13,6 +16,8 @@ import web.cssom.ClassName
 external interface ToolbarProps : Props {
     var editor: Editor?
 }
+
+private val toolbarApi = DrawingApi()
 
 private data class Tool(val label: String, val id: String, val icon: String)
 
@@ -99,6 +104,20 @@ val Toolbar = FC<ToolbarProps> { props ->
 
         iconButton("Undo", "ph-arrow-counter-clockwise") { it.undo() }
         iconButton("Redo", "ph-arrow-clockwise") { it.redo() }
+
+        ReactHTML.span { className = ClassName("tool-sep") }
+
+        // Ask the AI for a hint without drawing a circled "?"
+        ReactHTML.button {
+            className = ClassName("tool help")
+            disabled = editor == null
+            title = "Ask for a hint"
+            asDynamic()["aria-label"] = "Ask for a hint"
+            onClick = { _ ->
+                canvasDocumentId?.let { doc -> MainScope().launch { runCatching { toolbarApi.requestHint(doc) } } }
+            }
+            ReactHTML.span { className = ClassName("ph"); +"ph-question" }
+        }
 
         ReactHTML.span { className = ClassName("tool-sep") }
 
