@@ -29,6 +29,7 @@ kotlin {
             implementation(npm("react", "19.3.1"))
             implementation(npm("react-dom", "19.3.1"))
             implementation(npm("tldraw", "5.6.2"))
+            implementation(npm("three", "0.180.0"))
             // exercise statements: Markdown + LaTeX math
             implementation(npm("marked", "15.0.12"))
             implementation(npm("katex", "0.16.22"))

@@ -16,6 +16,7 @@ import io.ktor.server.routing.route
  * ```
  * GET /api/documents/{id}/actions        the agent's latest answer
  * GET /api/documents/{id}/conversation  the full conversation (snapshot, deltas, answers)
+ * GET /api/documents/{id}/plots          the active plot actions, with their source anchors
  * ```
  */
 fun Route.agentRoutes(actions: AgentService) {
@@ -30,6 +31,12 @@ fun Route.agentRoutes(actions: AgentService) {
             val id = call.parameters["id"]!!
             if (getDocument(id) == null) call.respond(HttpStatusCode.NotFound)
             else call.respond(actions.conversation(id))
+        }
+
+        get("plots") {
+            val id = call.parameters["id"]!!
+            if (getDocument(id) == null) call.respond(HttpStatusCode.NotFound)
+            else call.respond(actions.plots(id))
         }
     }
 }

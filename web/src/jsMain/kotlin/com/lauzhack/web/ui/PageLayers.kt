@@ -42,6 +42,7 @@ private const val EXERCISE_TOP = 72.0
 val PageOverlay = FC<Props> {
     ExerciseStatement()
     HintLayer()
+    PlotLayer()
 }
 
 /** The exercise statement (Markdown + KaTeX) printed at the top of the page. */

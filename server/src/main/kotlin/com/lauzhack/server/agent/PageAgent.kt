@@ -8,6 +8,7 @@ import com.lauzhack.shared.agent.AgentAction
 import com.lauzhack.shared.agent.AgentOutput
 import com.lauzhack.shared.agent.ConversationMessage
 import com.lauzhack.shared.agent.PlotInterval
+import com.lauzhack.shared.agent.PlotPoint
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -89,6 +90,20 @@ class KoogPageAgent(
                     )
                 )
             ),
+            AgentOutput(
+                listOf(
+                    AgentAction.PlotAction(
+                        id = "plot-chunk-9",
+                        functionName = "h",
+                        variable = "x",
+                        variableY = "y",
+                        expression = "x*x + y*y",
+                        domain = listOf(PlotInterval(-2.0, 2.0)),
+                        domainY = PlotInterval(-2.0, 2.0),
+                        points = listOf(PlotPoint(0.0, 0.0, 0.0, "min")),
+                    )
+                )
+            ),
             AgentOutput(emptyList()),
         )
 
@@ -153,7 +168,12 @@ class KoogPageAgent(
             2. PLOT — a function definition should be visualized.
                { "kind": "plot", "id": "plot-<source chunk id>", "functionName": "f",
                  "variable": "x", "expression": "<JavaScript>",
-                 "domain": [ { "from": -1, "to": 1 } ] }
+                 "domain": [ { "from": -1, "to": 1 } ], "points": [ { "x": 0.707, "y": 1, "label": "max" } ] }
+
+               For a function of TWO variables, name(x, y) = …, also set
+               "variableY" (the second argument) and "domainY" (its range); the
+               client renders a 3D surface. The expression uses both variables with
+               the same JavaScript rules.
 
                - Emit when a chunk DEFINES a function (name(var) = <math>). Re-emit with the
                  SAME id when the definition changes; withdraw with "remove": true when the
@@ -172,6 +192,22 @@ class KoogPageAgent(
                    it with an ERROR action.
                - domain: the window that best shows the definition; prefer the natural domain
                  (Math.sqrt(1-x*x) -> [-1, 1]); about [-5, 5] when nothing is special.
+                 For two variables pick "domain" and "domainY" so the surface reads well.
+               - studentDomain: when the STUDENT wrote the domain in their work —
+                 "x ∈ (0, 1]", "0 < x ≤ 1", "|x| < 1", "dom f = [−1, 2)", for
+                 one-variable functions — extract it here with the boundary
+                 semantics they wrote: "fromClosed"/"toClosed" true for closed ends
+                 (≤, ≥, [, ]), false for strict ones (<, >, (, )); unbounded ends
+                 have "from"/"to" null. For two-variable functions use intervals
+                 describing the region they wrote (a square when they bound both
+                 variables). Leave it empty when they did not state a domain.
+               - points: the special points THE STUDENT COMPUTED about this function on
+                 the page — zeros, critical points, extrema, evaluated values — extracted
+                 from the transcribed work, closed forms converted to numbers (1/√2 -> 0.707).
+                 For one variable: { "x": …, "y": … }; for two variables: { "x": …, "y": …,
+                 "z": … }. The value ("y" resp. "z") may be omitted when the student only
+                 wrote the inputs. Only points the student actually computed: never compute
+                 or invent points yourself, and leave "points" empty when they computed none.
 
             3. ERROR — a clear mathematical mistake in the student's work.
                { "kind": "error", "id": "error-<n>", "chunkId": "<the chunk with the mistake>",
