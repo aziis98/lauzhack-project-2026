@@ -1,7 +1,6 @@
 package com.lauzhack.web.ui
 
 import com.lauzhack.shared.api.DrawingApi
-import com.lauzhack.web.tldraw.Editor
 import com.lauzhack.web.tldraw.Tldraw
 import com.lauzhack.web.tldraw.toElementOrNull
 import com.lauzhack.web.tldraw.toShapePartial
@@ -39,8 +38,48 @@ private fun hiddenComponents(): dynamic {
 private fun singlePageOptions(): dynamic {
     val o: dynamic = js("{}")
     o.maxPages = 1
+    o.camera = documentCameraOptions()
     return o
 }
+
+/**
+ * Camera behaves like a vertical scrolling document:
+ * - wheel pans (scrolls) instead of zooming
+ * - the camera is constrained to a tall page; 'contain' pins the page while
+ *   zoomed out below the fit zoom and keeps it inside the viewport when zoomed in
+ */
+private fun documentCameraOptions(): dynamic {
+    val camera: dynamic = js("{}")
+    camera.wheelBehavior = "pan"
+
+    val constraints: dynamic = js("{}")
+    val bounds: dynamic = js("{}")
+    bounds.x = 0.0
+    bounds.y = 0.0
+    bounds.w = PAGE_WIDTH
+    bounds.h = PAGE_HEIGHT
+    constraints.bounds = bounds
+
+    val origin: dynamic = js("{}")
+    origin.x = 0.5
+    origin.y = 0.0 // open at the top of the document, like a real document
+    constraints.origin = origin
+
+    constraints.behavior = "contain"
+    constraints.initialZoom = "fit-x-100"
+
+    val padding: dynamic = js("{}")
+    padding.x = 32.0
+    padding.y = 32.0
+    constraints.padding = padding
+
+    camera.constraints = constraints
+    return camera
+}
+
+/** Dimensions of the document page (page-space bounds). */
+private const val PAGE_WIDTH = 960.0
+private const val PAGE_HEIGHT = 4800.0
 
 val Canvas = FC<CanvasProps> { props ->
     Tldraw {
@@ -74,9 +113,8 @@ val Canvas = FC<CanvasProps> { props ->
                         Console.warn("skipped shape: " + (created.exceptionOrNull()?.message ?: "unknown error"))
                     }
                 }
-                if (partials.isNotEmpty()) {
-                    runCatching { editor.zoomToFit() }
-                }
+                // camera placement is owned by the camera constraints
+                // (initialZoom 'fit-x-100' + origin), not zoomToFit
 
                 // SAVE: batch-replace when content changed (poll every 2.5s)
                 var lastPayload: String? = null

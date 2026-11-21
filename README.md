@@ -17,6 +17,12 @@ toolbar, pages) is hidden — pick tools via keyboard shortcuts (V, D, E, R,
 A, T) and colors from the contextual style panel. Autosave runs silently
 in the background.
 
+The canvas behaves like a **vertical scrolling document**: the camera is
+constrained to a tall page (960×4800) with `contain` behavior — the mouse
+wheel pans vertically instead of zooming, zooming out past the fit zoom pins
+the page, and zooming in keeps the camera inside the document bounds
+(`wheelBehavior: pan`, `initialZoom: fit-x-100`).
+
 The database stores **generic drawing data** (strokes, geometry, text, arrows
 with style/color info) — tldraw is just the web-facing editor. Android and iOS
 apps planned later will consume the same API and the same `shared` module.
