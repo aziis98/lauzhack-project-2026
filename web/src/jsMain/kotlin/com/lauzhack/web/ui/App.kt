@@ -246,8 +246,9 @@ val App = FC<Props> {
                 }
             }
 
-            // ?debug: right drawer with the agent/OCR transcripts + canvas overlays
+            // ?debug: pipeline inspector — poller (always on when debug mode) + floating window
             if (debugMode) {
+                DebugPoller { documentId = openId }
                 DebugDrawer { documentId = openId }
             }
         }

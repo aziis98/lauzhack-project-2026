@@ -1,6 +1,9 @@
 package com.lauzhack.web.ui
 
 import com.lauzhack.shared.api.DrawingApi
+import com.lauzhack.shared.debug.DebugPayload
+import com.lauzhack.shared.ocr.stripBboxes
+import com.lauzhack.web.markdown.renderMathMarkdown
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,7 +22,36 @@ import web.cssom.ClassName
 
 private val debugApi = DrawingApi()
 private val debugScope = CoroutineScope(Dispatchers.Default)
-private var debugJob: Job? = null
+internal var debugJob: Job? = null
+
+/**
+ * Starts/stops the /debug poller — mounted once when ?debug is active,
+ * regardless of whether the drawer window is open, so the canvas overlay
+ * boxes appear immediately.
+ */
+val DebugPoller = FC<DebugPollerProps> { props ->
+    var hasData by useState(false)
+    useEffect(props.documentId) {
+        debugJob?.cancel()
+        debugJob = debugScope.launch {
+            while (isActive) {
+                val payload = runCatching { debugApi.debug(props.documentId) }.getOrNull()
+                if (payload != null && DebugState.payload != payload) {
+                    DebugState.payload = payload
+                    DebugState.notifyChanged()
+                }
+                if (payload != null && !hasData) hasData = true
+                delay(2500)
+            }
+        }
+        debugJob // keep the reference alive for GC clarity
+    }
+    null
+}
+
+external interface DebugPollerProps : Props {
+    var documentId: String
+}
 
 external interface DebugDrawerProps : Props {
     var documentId: String
@@ -39,11 +71,21 @@ private val DebugToggle = FC<DebugToggleProps> { props ->
     }
 }
 
+/** Colored kind badge for a chunk's OCR classification. */
+private fun kindBadgeClass(kind: String?): String = when (kind) {
+    "MATH" -> "badge badge-math"
+    "TEXT" -> "badge badge-text"
+    "HINT_REQUEST" -> "badge badge-hint"
+    "DRAWING" -> "badge badge-drawing"
+    "UNREADABLE" -> "badge badge-unreadable"
+    else -> "badge badge-pending"
+}
+
 /**
  * Floating pipeline inspector window (?debug). Hidden at first: only a 🐛 tab
- * floats top-right; clicking it opens a draggable, closable window showing
- * the agent conversation (system prompt + every turn), the OCR prompts and
- * answers per chunk, and the hints. Feeds the canvas overlay via DebugState.
+ * floats top-right; clicking it opens a draggable, closable window. Polling
+ * lives in [DebugPoller] (always on with ?debug), so the canvas boxes render
+ * even with the window hidden.
  */
 val DebugDrawer = FC<DebugDrawerProps> { props ->
     var open by useState(DebugState.drawerOpen)
@@ -59,23 +101,6 @@ val DebugDrawer = FC<DebugDrawerProps> { props ->
     // window position (page px); null until the user drags it
     var pos by useState<Pair<Double, Double>?>(null)
     val origin = useRef(Pair(0.0, 0.0))
-
-    // single poller: refresh the shared DebugState, then re-render
-    useEffect(props.documentId, open) {
-        if (!open) return@useEffect
-        debugJob?.cancel()
-        debugJob = debugScope.launch {
-            while (isActive) {
-                val payload = runCatching { debugApi.debug(props.documentId) }.getOrNull()
-                if (payload != null && DebugState.payload != payload) {
-                    DebugState.payload = payload
-                    DebugState.notifyChanged()
-                }
-                delay(2500)
-            }
-        }
-        null
-    }
 
     if (!open) {
         ReactHTML.button {
@@ -105,7 +130,7 @@ val DebugDrawer = FC<DebugDrawerProps> { props ->
         }
         asDynamic().style = css
 
-        // ---- header: only the dedicated handle drags, so buttons always work ----
+        // ---- header: drag handle + close ----
         ReactHTML.div {
             className = ClassName("debug-head")
             ReactHTML.span {
@@ -177,115 +202,491 @@ val DebugDrawer = FC<DebugDrawerProps> { props ->
                 }
             }
 
-            if (payload != null) {
-
-            // ---- agent transcript ----
-            ReactHTML.section {
-                className = ClassName("debug-section")
-                key = Key("agent")
-                ReactHTML.h3 { +"Agent conversation (${payload.agent.turns.size} turns)" }
-                if (showPrompts) {
-                    ReactHTML.details {
-                        className = ClassName("debug-prompt")
-                        ReactHTML.summary { +"system prompt" }
-                        ReactHTML.pre { +payload.agent.systemPrompt }
-                    }
-                }
-                for ((i, turn) in payload.agent.turns.withIndex()) {
-                    ReactHTML.details {
-                        className = ClassName("debug-turn ${turn.role} ${turn.label}")
-                        key = Key("turn-$i")
-                        ReactHTML.summary { +"[${turn.label}] ${turn.role} · ${turn.content.length} chars" }
-                        ReactHTML.pre { +turn.content }
-                    }
-                }
-                if (payload.agent.turns.isEmpty()) {
-                    ReactHTML.div { className = ClassName("debug-empty"); +"no turns yet" }
-                }
+            if (payload == null) {
+                ReactHTML.div { className = ClassName("debug-empty"); +"Loading pipeline…" }
+            } else {
+            // ================ OCR (top section) ================
+            DebugOcrSection {
+                this.payload = payload
+                documentId = props.documentId
+                showPrompts = showPrompts
+                expandedChunk = expanded
+                onExpand = { id -> expanded = if (expanded == id) null else id }
             }
 
-            // ---- OCR per chunk ----
-            ReactHTML.section {
-                className = ClassName("debug-section")
-                key = Key("ocr")
-                ReactHTML.h3 { +"OCR (${payload.ocr.chunks.size} chunks)" }
-                if (showPrompts) {
-                    ReactHTML.details {
-                        className = ClassName("debug-prompt")
-                        ReactHTML.summary { +"OCR system prompt" }
-                        ReactHTML.pre { +payload.ocr.systemPrompt }
+            // ================ Agent conversation ================
+            DebugAgentSection {
+                this.payload = payload
+                showPrompts = showPrompts
+            }
+
+            // ================ Hints ================
+            DebugHintsSection { this.payload = payload }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------
+// OCR section
+// ---------------------------------------------------------------
+private external interface DebugOcrSectionProps : Props {
+    var payload: DebugPayload
+    var documentId: String
+    var showPrompts: Boolean
+    var expandedChunk: String?
+    var onExpand: ((String) -> Unit)?
+}
+
+private val DebugOcrSection = FC<DebugOcrSectionProps> { props ->
+    val payload = props.payload
+
+    ReactHTML.section {
+        className = ClassName("debug-section")
+        key = Key("ocr")
+        ReactHTML.h3 { +"OCR — ${payload.ocr.chunks.size} chunk(s)" }
+        if (props.showPrompts) {
+            DebugCollapsiblePrompt {
+                title = "OCR system prompt"
+                content = payload.ocr.systemPrompt
+            }
+        }
+
+        for (chunk in payload.ocr.chunks) {
+            val isExpanded = props.expandedChunk == chunk.chunkId
+            val kind = chunk.response?.kind?.name
+
+            ReactHTML.div {
+                className = ClassName("debug-chunk-card")
+                key = Key(chunk.chunkId)
+
+                // header row: id + kind badge + fragment count
+                ReactHTML.button {
+                    className = ClassName("debug-chunk-head")
+                    onClick = { _ -> props.onExpand?.invoke(chunk.chunkId) }
+                    ReactHTML.span {
+                        className = ClassName(kindBadgeClass(kind))
+                        +(kind ?: "pending")
+                    }
+                    +" ${chunk.chunkId} · ${chunk.fragments.size} fragments"
+                    if (!isExpanded) {
+                        ReactHTML.span {
+                            className = ClassName("debug-expand-hint")
+                            +" ▸"
+                        }
                     }
                 }
-                for (chunk in payload.ocr.chunks) {
-                    val isExpanded = expanded == chunk.chunkId
-                    ReactHTML.div {
-                        className = ClassName("debug-chunk")
-                        key = Key(chunk.chunkId)
-                        ReactHTML.button {
-                            className = ClassName("debug-chunk-head")
-                            onClick = { _ -> expanded = if (isExpanded) null else chunk.chunkId }
-                            val kind = chunk.response?.kind?.name ?: "pending"
-                            +"${chunk.chunkId} · $kind · ${chunk.fragments.size} fragments"
-                        }
-                        if (isExpanded) {
-                            if (showPrompts) {
+
+                if (isExpanded) {
+                    // transcription (rendered, clean LaTeX)
+                    val transcription = chunk.response?.content
+                    if (transcription != null && transcription.isNotBlank()) {
+                        ReactHTML.div {
+                            className = ClassName("debug-transcription")
+                            ReactHTML.h4 { +"transcription" }
+                            val clean = transcription.stripBboxes()
+                            if (clean.isNotBlank()) {
+                                val html = renderMathMarkdown(clean)
+                                val inner: dynamic = js("({})")
+                                inner.__html = html
                                 ReactHTML.div {
-                                    className = ClassName("debug-prompt-inline")
-                                    ReactHTML.h4 { +"prompt sent to the model" }
-                                    ReactHTML.pre { +chunk.userText }
-                                }
-                                ReactHTML.img {
-                                    className = ClassName("debug-img")
-                                    src = "/api/documents/${props.documentId}/chunks/${chunk.chunkId}/image.png"
-                                    alt = "chunk raster"
-                                }
-                                ReactHTML.img {
-                                    className = ClassName("debug-img")
-                                    src = "/api/documents/${props.documentId}/chunks/${chunk.chunkId}/annotated.png"
-                                    alt = "segmentation"
+                                    className = ClassName("debug-math")
+                                    asDynamic().dangerouslySetInnerHTML = inner
                                 }
                             }
-                            ReactHTML.h4 { +"fragments (image px)" }
-                            ReactHTML.pre { +chunk.fragments.joinToString("\n") { "(${it.minX},${it.minY},${it.maxX},${it.maxY}) area=${it.area}" } }
-                            ReactHTML.h4 { +"response" }
-                            val responseText = chunk.response?.content
-                            if (responseText != null) {
-                                ReactHTML.pre { +responseText }
-                                if (chunk.modelBoxes.isNotEmpty()) {
-                                    ReactHTML.h4 { +"model bboxes (page units)" }
-                                    ReactHTML.pre {
-                                        +chunk.modelBoxes.joinToString("\n") {
-                                            "(${it.minX.toInt()},${it.minY.toInt()})–(${it.maxX.toInt()},${it.maxY.toInt()}) ${it.label}"
+                            ReactHTML.details {
+                                className = ClassName("debug-raw")
+                                ReactHTML.summary { +"raw augmented" }
+                                ReactHTML.pre { +transcription }
+                            }
+                        }
+                    } else if (kind == "UNREADABLE") {
+                        ReactHTML.div {
+                            className = ClassName("debug-empty")
+                            +"unreadable"
+                        }
+                    } else {
+                        ReactHTML.div {
+                            className = ClassName("debug-empty")
+                            +"pending…"
+                        }
+                    }
+
+                    // model bboxes table
+                    if (chunk.modelBoxes.isNotEmpty()) {
+                        ReactHTML.div {
+                            className = ClassName("debug-boxes")
+                            ReactHTML.h4 { +"model bboxes (${chunk.modelBoxes.size})" }
+                            ReactHTML.table {
+                                className = ClassName("debug-box-table")
+                                ReactHTML.thead {
+                                    ReactHTML.tr {
+                                        ReactHTML.th { +"symbol" }
+                                        ReactHTML.th { +"page box" }
+                                        ReactHTML.th { +"size" }
+                                    }
+                                }
+                                ReactHTML.tbody {
+                                    for (box in chunk.modelBoxes) {
+                                        ReactHTML.tr {
+                                            key = Key("${chunk.chunkId}-box-${box.label}-${box.minX.toInt()}")
+                                            ReactHTML.td { +box.label }
+                                            ReactHTML.td {
+                                                className = ClassName("mono")
+                                                +"(${box.minX.toInt()},${box.minY.toInt()})–(${box.maxX.toInt()},${box.maxY.toInt()})"
+                                            }
+                                            ReactHTML.td {
+                                                className = ClassName("mono")
+                                                +"${(box.maxX - box.minX).toInt()}×${(box.maxY - box.minY).toInt()}"
+                                            }
                                         }
                                     }
                                 }
-                            } else {
-                                ReactHTML.div { className = ClassName("debug-empty"); +"pending…" }
+                            }
+                        }
+                    }
+
+                    // images
+                    if (props.showPrompts) {
+                        ReactHTML.div {
+                            className = ClassName("debug-images")
+                            ReactHTML.img {
+                                className = ClassName("debug-img")
+                                src = "/api/documents/${props.documentId}/chunks/${chunk.chunkId}/image.png"
+                                alt = "chunk raster"
+                            }
+                            ReactHTML.img {
+                                className = ClassName("debug-img")
+                                src = "/api/documents/${props.documentId}/chunks/${chunk.chunkId}/annotated.png"
+                                alt = "segmentation"
+                            }
+                        }
+                        DebugCollapsiblePrompt {
+                            title = "prompt sent to the model"
+                            content = chunk.userText
+                        }
+                    }
+
+                    // fragments compact list
+                    if (chunk.fragments.isNotEmpty()) {
+                        ReactHTML.details {
+                            className = ClassName("debug-raw")
+                            ReactHTML.summary { +"${chunk.fragments.size} fragments (image px)" }
+                            ReactHTML.pre {
+                                +chunk.fragments.joinToString("\n") {
+                                    "#${it.id} (${it.minX},${it.minY})–(${it.maxX},${it.maxY}) area=${it.area}"
+                                }
                             }
                         }
                     }
                 }
             }
-
-            // ---- hints ----
-            ReactHTML.section {
-                className = ClassName("debug-section")
-                key = Key("hints")
-                ReactHTML.h3 { +"Hints (${payload.hints.size})" }
-                for (hint in payload.hints) {
-                    ReactHTML.details {
-                        key = Key(hint.id)
-                        ReactHTML.summary {
-                            +"${hint.id} · ${hint.triggerChunkId ?: "-"} · ${hint.status.name}"
-                        }
-                        ReactHTML.pre { +hint.toString() }
-                    }
-                }
-                if (payload.hints.isEmpty()) {
-                    ReactHTML.div { className = ClassName("debug-empty"); +"none" }
-                }
-            }
-            } // payload != null
         }
     }
+}
+
+// ---------------------------------------------------------------
+// Agent section
+// ---------------------------------------------------------------
+private external interface DebugAgentSectionProps : Props {
+    var payload: DebugPayload
+    var showPrompts: Boolean
+}
+
+private val DebugAgentSection = FC<DebugAgentSectionProps> { props ->
+    val payload = props.payload
+
+    ReactHTML.section {
+        className = ClassName("debug-section")
+        key = Key("agent")
+        ReactHTML.h3 { +"Agent — ${payload.agent.turns.size} turn(s)" }
+        if (props.showPrompts) {
+            DebugCollapsiblePrompt {
+                title = "system prompt"
+                content = payload.agent.systemPrompt
+            }
+        }
+
+        for ((i, turn) in payload.agent.turns.withIndex()) {
+            DebugTurn {
+                key = Key("turn-$i")
+                data = turn
+            }
+        }
+        if (payload.agent.turns.isEmpty()) {
+            ReactHTML.div { className = ClassName("debug-empty"); +"no turns yet" }
+        }
+    }
+}
+
+// ---------------------------------------------------------------
+// One agent turn, parsed and rendered as a card
+// ---------------------------------------------------------------
+private external interface DebugTurnProps : Props {
+    var data: com.lauzhack.shared.debug.DebugTurn
+}
+
+private val DebugTurn = FC<DebugTurnProps> { props ->
+    val turn = props.data
+
+    ReactHTML.div {
+        className = ClassName("debug-turn-card ${turn.label}")
+
+        // header: label + role
+        ReactHTML.div {
+            className = ClassName("debug-turn-head")
+            val icon = when (turn.label) {
+                "page" -> "ph-file-text"
+                "delta" -> "ph-arrows-left-right"
+                else -> "ph-chat-circle-text"
+            }
+            ReactHTML.span { className = ClassName("ph"); +icon }
+            ReactHTML.span {
+                className = ClassName("debug-turn-label ${turn.role}")
+                +"[${turn.label}]"
+            }
+            ReactHTML.span {
+                className = ClassName("debug-turn-meta")
+                +"${turn.role} · ${turn.content.length} chars"
+            }
+        }
+
+        // body: parsed rendering depending on turn type
+        when (turn.label) {
+            "assistant" -> DebugAssistantActions {
+                content = turn.content
+            }
+            "page", "delta" -> DebugPageOrDelta {
+                content = turn.content
+                label = turn.label
+            }
+            else -> ReactHTML.pre { +turn.content }
+        }
+
+        // raw JSON collapsible
+        ReactHTML.details {
+            className = ClassName("debug-raw")
+            ReactHTML.summary { +"raw" }
+            ReactHTML.pre { +turn.content }
+        }
+    }
+}
+
+// ---------------------------------------------------------------
+// Assistant actions → labeled cards
+// ---------------------------------------------------------------
+private external interface DebugAssistantActionsProps : Props {
+    var content: String
+}
+
+private val DebugAssistantActions = FC<DebugAssistantActionsProps> { props ->
+    val parsed: dynamic = try {
+        JSON.parse(props.content)
+    } catch (_: Exception) {
+        null
+    }
+    val actions = parsed?.actions as? Array<dynamic>
+
+    if (actions == null || actions.isEmpty()) {
+        ReactHTML.div {
+            className = ClassName("debug-silence")
+            +"silence — no actions"
+        }
+        return@FC
+    }
+
+    ReactHTML.div {
+        className = ClassName("debug-actions")
+        for (action in actions) {
+            val kind = action.kind?.toString() ?: ""
+            ReactHTML.div {
+                className = ClassName("debug-action-card action-$kind")
+                when (kind) {
+                    "hint" -> {
+                        ReactHTML.div {
+                            className = ClassName("debug-action-title")
+                            ReactHTML.span { className = ClassName("ph"); +"ph-lightbulb" }
+                            +"HINT · ${action.id ?: ""}"
+                        }
+                        if (action.title != null) ReactHTML.p { +(action.title.toString()) }
+                        if (action.message != null) ReactHTML.p { +(action.message.toString()) }
+                        val steps = action.steps as? Array<dynamic>
+                        if (steps != null && steps.isNotEmpty()) {
+                            ReactHTML.ul {
+                                for (s in steps) ReactHTML.li { +(s.toString()) }
+                            }
+                        }
+                    }
+                    "plot" -> {
+                        ReactHTML.div {
+                            className = ClassName("debug-action-title")
+                            ReactHTML.span { className = ClassName("ph"); +"ph-chart-line" }
+                            +"PLOT · ${action.id ?: ""}"
+                        }
+                        ReactHTML.p {
+                            className = ClassName("mono")
+                            +"${action.functionName ?: "?"}(${action.variable ?: "x"}) = ${action.expression ?: "?"}"
+                        }
+                        val domain = action.domain as? Array<dynamic>
+                        if (domain != null && domain.isNotEmpty()) {
+                            ReactHTML.p {
+                                className = ClassName("debug-action-meta")
+                                +"domain: ${domain.joinToString(" ∪ ") { d -> "[${d?.from ?: "?"}, ${d?.to ?: "?"}]" }}"
+                            }
+                        }
+                    }
+                    "error" -> {
+                        ReactHTML.div {
+                            className = ClassName("debug-action-title")
+                            ReactHTML.span { className = ClassName("ph"); +"ph-warning" }
+                            +"ERROR · ${action.id ?: ""}"
+                        }
+                        if (action.chunkId != null) ReactHTML.p { +"chunk: ${action.chunkId}" }
+                        if (action.message != null) ReactHTML.p { +(action.message.toString()) }
+                        if (action.suggestion != null) {
+                            ReactHTML.p {
+                                className = ClassName("debug-action-meta")
+                                +(action.suggestion.toString())
+                            }
+                        }
+                    }
+                    else -> {
+                        ReactHTML.div {
+                            className = ClassName("debug-action-title")
+                            +"$kind (unknown)"
+                        }
+                    }
+                }
+                val remove = action.remove
+                if (remove == true) {
+                    ReactHTML.span {
+                        className = ClassName("debug-action-removed")
+                        +"withdrawn"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------
+// Page snapshot or delta → parsed chunk rows
+// ---------------------------------------------------------------
+private external interface DebugPageOrDeltaProps : Props {
+    var content: String
+    var label: String
+}
+
+private val DebugPageOrDelta = FC<DebugPageOrDeltaProps> { props ->
+    val parsed: dynamic = try {
+        JSON.parse(props.content)
+    } catch (_: Exception) {
+        null
+    }
+    if (parsed == null) return@FC
+
+    val chunks: Array<dynamic>? = when (props.label) {
+        "page" -> parsed.chunks as? Array<dynamic>
+        else -> {
+            // delta: added + modified
+            val added = parsed.added as? Array<dynamic> ?: emptyArray()
+            val modified = parsed.modified as? Array<dynamic> ?: emptyArray()
+            (added + modified).ifEmpty { null }
+        }
+    }
+    val removed = parsed.removed as? Array<dynamic>
+
+    // exercise (page only)
+    if (props.label == "page" && parsed.exercise != null) {
+        val exerciseText = parsed.exercise.toString()
+        if (exerciseText.isNotBlank()) {
+            ReactHTML.div {
+                className = ClassName("debug-exercise-tag")
+                +"exercise: ${exerciseText.take(80)}…"
+            }
+        }
+    }
+
+    if (removed != null && removed.isNotEmpty()) {
+        ReactHTML.div {
+            className = ClassName("debug-removed-tag")
+            +"− removed: ${removed.joinToString(", ") { it.toString() }}"
+        }
+    }
+
+    if (chunks != null && chunks.isNotEmpty()) {
+        ReactHTML.div {
+            className = ClassName("debug-chunk-rows")
+            for (chunk in chunks) {
+                ReactHTML.div {
+                    className = ClassName("debug-chunk-row")
+                    ReactHTML.span {
+                        className = ClassName(kindBadgeClass(chunk.kind?.toString()))
+                        +(chunk.kind?.toString() ?: "?")
+                    }
+                    ReactHTML.span {
+                        className = ClassName("mono")
+                        +"${chunk.id ?: "?"}"
+                    }
+                    ReactHTML.span {
+                        className = ClassName("debug-chunk-content")
+                        +(chunk.content?.toString()?.take(60) ?: "")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------
+// Hints section
+// ---------------------------------------------------------------
+private external interface DebugHintsSectionProps : Props {
+    var payload: DebugPayload
+}
+
+private val DebugHintsSection = FC<DebugHintsSectionProps> { props ->
+    ReactHTML.section {
+        className = ClassName("debug-section")
+        key = Key("hints")
+        ReactHTML.h3 { +"Hints — ${props.payload.hints.size}" }
+        for (hint in props.payload.hints) {
+            ReactHTML.div {
+                className = ClassName("debug-hint-row")
+                key = Key(hint.id)
+                ReactHTML.span { className = ClassName(kindBadgeClass(hint.card?.let { "TEXT" } ?: "pending")); +hint.status.name }
+                ReactHTML.span {
+                    className = ClassName("mono")
+                    +"${hint.id} → chunk ${hint.triggerChunkId ?: "?"}"
+                }
+                hint.card?.let { card ->
+                    ReactHTML.p { +"${card.title}: ${card.message.take(100)}" }
+                }
+            }
+        }
+        if (props.payload.hints.isEmpty()) {
+            ReactHTML.div { className = ClassName("debug-empty"); +"none" }
+        }
+    }
+}
+
+// ---------------------------------------------------------------
+// Collapsible raw prompt
+// ---------------------------------------------------------------
+private external interface DebugCollapsiblePromptProps : Props {
+    var title: String
+    var content: String
+}
+
+private val DebugCollapsiblePrompt = FC<DebugCollapsiblePromptProps> { props ->
+    ReactHTML.details {
+        className = ClassName("debug-prompt")
+        ReactHTML.summary { +props.title }
+        ReactHTML.pre { +props.content }
+    }
+}
+
+/** JS JSON binding. */
+private external object JSON {
+    fun <T> parse(text: String): T
 }
