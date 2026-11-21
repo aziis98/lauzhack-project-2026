@@ -1,5 +1,11 @@
 package com.lauzhack.server.routes
 
+import com.lauzhack.server.chunking.ChunkService
+import com.lauzhack.server.ocr.ChunkRasterizer
+import com.lauzhack.server.ocr.OcrService
+import io.ktor.http.ContentType
+import io.ktor.server.response.respondBytes
+import com.lauzhack.shared.ocr.TranscribedChunk
 import com.lauzhack.server.db.createDocument
 import com.lauzhack.server.db.createElement
 import com.lauzhack.server.db.deleteDocument
@@ -23,7 +29,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 
-fun Route.apiRoutes() {
+fun Route.apiRoutes(ocr: OcrService) {
     route("/api/documents") {
         get {
             call.respond(listDocuments())
@@ -46,7 +52,46 @@ fun Route.apiRoutes() {
             }
             delete {
                 val id = call.parameters["id"]!!
-                if (deleteDocument(id)) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound)
+                if (deleteDocument(id)) {
+                    ChunkService.forget(id)
+                    ocr.forget(id)
+                    call.respond(HttpStatusCode.NoContent)
+                } else {
+                    call.respond(HttpStatusCode.NotFound)
+                }
+            }
+
+            // Handwriting macro-blocks with page coordinates (debug/inspection; see shared/chunking).
+            get("chunks") {
+                val id = call.parameters["id"]!!
+                if (getDocument(id) == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(ChunkService.snapshot(id))
+                }
+            }
+
+            // The exact image the OCR model receives for one chunk; debug/inspection.
+            get("chunks/{cid}/image.png") {
+                val id = call.parameters["id"]!!
+                val chunk = ChunkService.snapshot(id).find { it.id == call.parameters["cid"] }
+                if (chunk == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    val ids = chunk.strokeIds.toSet()
+                    val png = ChunkRasterizer().render(chunk.bounds, listElements(id).filter { it.id in ids })
+                    call.respondBytes(png, ContentType.Image.PNG)
+                }
+            }
+
+            // Chunks with their OCR result (null = pending); debug/inspection.
+            get("transcription") {
+                val id = call.parameters["id"]!!
+                if (getDocument(id) == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(ChunkService.snapshot(id).map { TranscribedChunk(it, ocr.cached(it.contentHash)) })
+                }
             }
 
             route("elements") {
@@ -65,6 +110,7 @@ fun Route.apiRoutes() {
                         call.respond(HttpStatusCode.NotFound)
                     } else {
                         replaceElements(id, elements)
+                        ChunkService.refresh(id)
                         call.respond(HttpStatusCode.OK, mapOf("count" to elements.size))
                     }
                 }
@@ -72,6 +118,7 @@ fun Route.apiRoutes() {
                     val id = call.parameters["id"]!!
                     val element = call.receive<Element>()
                     if (createElement(id, element)) {
+                        ChunkService.refresh(id)
                         call.respond(HttpStatusCode.Created, element)
                     } else {
                         call.respond(HttpStatusCode.NotFound)
@@ -84,12 +131,14 @@ fun Route.apiRoutes() {
                         val eid = call.parameters["eid"]!!
                         val element = call.receive<Element>()
                         val updated = updateElement(id, eid, element)
+                        if (updated != null) ChunkService.refresh(id)
                         if (updated == null) call.respond(HttpStatusCode.NotFound) else call.respond(updated)
                     }
                     delete {
                         val id = call.parameters["id"]!!
                         val eid = call.parameters["eid"]!!
                         if (deleteElement(id, eid)) {
+                            ChunkService.refresh(id)
                             call.respond(HttpStatusCode.NoContent)
                         } else {
                             call.respond(HttpStatusCode.NotFound)

@@ -228,7 +228,9 @@ lauzhack-project-2026/
 
 ### Where AI fits (integration points, conceptual)
 
-When AI features are added, typical integration points will be:
+Part of this is already implemented — handwriting chunking and OCR run on the
+server today (see [Handwriting chunks](#handwriting-chunks) and [OCR](#ocr)
+below). The general integration points:
 
 - **Client-side (web)**: detect user intents (e.g. a new stroke that looks like `?`, or an explicit “Ask AI” action), gather context (nearby elements, selected region, full document snapshot), call an AI service/orchestrator.
 - **AI/orchestration layer** (to be implemented): may run as part of the server, as a separate service, or via external APIs—responsibility is to interpret student context and produce actions.
@@ -294,6 +296,44 @@ Base URL in development: `http://localhost:8080` (web dev server proxies `/api` 
 | `POST` | `/api/documents/{id}/elements` | Create a single element |
 | `PATCH` | `/api/documents/{id}/elements/{eid}` | Replace/update a single element (full element body) |
 | `DELETE` | `/api/documents/{id}/elements/{eid}` | Delete a single element |
+| `GET` | `/api/documents/{id}/chunks` | List handwriting chunks (debug/inspection) |
+| `GET` | `/api/documents/{id}/transcription` | List chunk transcriptions (debug) |
+| `GET` | `/api/documents/{id}/chunks/{chunkId}/image.png` | Rasterized chunk image sent to OCR (debug) |
+
+### Handwriting chunks
+
+Every element write re-chunks the page: strokes are grouped into macro-blocks
+purely by spatial proximity (`shared/.../chunking`), and each block keeps a
+stable id across edits. Only blocks whose content hash changed are reported
+as modified, so downstream OCR/AI only re-processes what the user touched.
+
+```
+GET    /api/documents/{id}/chunks    [{ id, strokeIds, bounds, contentHash, version }]   (debug/inspection)
+```
+
+Inside the server, consumers subscribe to `ChunkService.events`, which pushes
+`{ added, modified, removed }` (plus the strokes of changed chunks) after every write.
+
+### OCR
+
+Every added/modified chunk is rendered to a PNG on the server and transcribed by a
+light vision model on [Together AI](https://www.together.ai)
+(`deepseek-ai/DeepSeek-V4.1-Flash-1017` by default) through
+[Koog](https://github.com/JetBrains/koog). The result is `{ kind, content }` with
+`kind` one of `MATH | TEXT | QUESTION_MARK | DRAWING | UNREADABLE` and `content`
+in LaTeX. Results are cached by chunk content hash and debounced (1 s) while a
+block is being written; `OcrService.events` streams them to the reasoning agent.
+
+```sh
+export TOGETHER_API_KEY=...      # OCR (optional: without it chunks stay pending)
+export ANTHROPIC_API_KEY=...     # reasoning model (not used yet)
+./gradlew :server:run
+```
+
+```
+GET    /api/documents/{id}/transcription               [{ chunk, transcription | null }]   (debug)
+GET    /api/documents/{id}/chunks/{chunkId}/image.png  image sent to the OCR model        (debug)
+```
 
 ### Example: element JSON shape
 
