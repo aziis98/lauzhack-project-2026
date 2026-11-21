@@ -12,6 +12,9 @@ ai:
   ocrModel: "$OCR_MODEL:deepseek-ai/DeepSeek-V4.1-Flash-1017"
   # Hints for the circled "?": also on Together AI.
   hintModel: "$HINT_MODEL:deepseek-ai/DeepSeek-V4.1-Flash"
+  # The page agent (actions list: hint / plot). No true "medium" tier is available
+  # serverless on Together: Flash is the fast default, V4-Pro-0813 the heavy option.
+  agentModel: "$AGENT_MODEL:deepseek-ai/DeepSeek-V4.1-Flash"
   # Heavy reasoning model on Anthropic (plots, checks, recall).
   anthropicApiKey: "$ANTHROPIC_API_KEY:"
   reasoningModel: "$REASONING_MODEL:claude-opus-5-5"

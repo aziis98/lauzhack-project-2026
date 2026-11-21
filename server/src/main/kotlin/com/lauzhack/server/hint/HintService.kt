@@ -1,7 +1,9 @@
 package com.lauzhack.server.hint
 
 import com.lauzhack.server.ocr.TranscriptionEvent
+import com.lauzhack.shared.chunking.BoundingBox
 import com.lauzhack.shared.hint.Hint
+import com.lauzhack.shared.hint.HintCard
 import com.lauzhack.shared.hint.HintStatus
 import com.lauzhack.shared.ocr.ChunkKind
 import com.lauzhack.shared.ocr.TranscribedChunk
@@ -73,12 +75,12 @@ class HintService(
     }
 
     suspend fun handle(event: TranscriptionEvent) {
-        if (generator == null) return
         val s = docs.computeIfAbsent(event.documentId) { DocState() }
         s.mutex.withLock {
             when (event) {
                 is TranscriptionEvent.Removed -> removeForTrigger(s, event.chunkId)
                 is TranscriptionEvent.Updated -> {
+                    if (generator == null) return@withLock // the page agent adopts hints instead
                     val chunk = event.chunk.chunk
                     val kind = event.chunk.transcription?.kind ?: return@withLock // OCR pending
                     if (kind != ChunkKind.HINT_REQUEST) {
@@ -149,5 +151,37 @@ class HintService(
 
     fun forget(documentId: String) {
         docs.remove(documentId)?.jobs?.values?.forEach { it.cancel() }
+    }
+
+    /**
+     * Adoption path used by the page agent: reserve a THINKING hint for a circled
+     * "?" without calling any model. Returns the hint id, or null when this exact
+     * content was already answered (or its hint dismissed) — the same semantics as
+     * [handle] gives the generator path.
+     */
+    suspend fun request(documentId: String, triggerChunkId: String, contentHash: String, anchor: BoundingBox): String? {
+        val s = docs.computeIfAbsent(documentId) { DocState() }
+        return s.mutex.withLock {
+            if (!s.handled.add(contentHash)) return null
+            removeForTrigger(s, triggerChunkId)
+            val hint = Hint(
+                id = "hint-${s.nextId++}",
+                triggerChunkId = triggerChunkId,
+                anchor = anchor,
+                status = HintStatus.THINKING,
+                createdAt = clock(),
+            )
+            s.hints[hint.id] = hint
+            hint.id
+        }
+    }
+
+    /** Fill a hint reserved by [request]; no-op if it was removed meanwhile. */
+    suspend fun complete(documentId: String, hintId: String, card: HintCard) {
+        val s = docs[documentId] ?: return
+        s.mutex.withLock {
+            val hint = s.hints[hintId] ?: return
+            s.hints[hintId] = hint.copy(status = HintStatus.READY, card = card)
+        }
     }
 }

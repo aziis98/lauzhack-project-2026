@@ -1,6 +1,8 @@
 package com.lauzhack.server
 
 import com.lauzhack.server.ai.AiModels
+import com.lauzhack.server.agent.AgentService
+import com.lauzhack.server.agent.KoogPageAgent
 import com.lauzhack.server.chunking.ChunkService
 import com.lauzhack.server.db.getDocument
 import com.lauzhack.server.db.initDatabase
@@ -9,6 +11,8 @@ import com.lauzhack.server.hint.KoogHintAgent
 import com.lauzhack.server.ocr.KoogChunkRecognizer
 import com.lauzhack.server.ocr.OcrService
 import com.lauzhack.server.db.jsonConfig
+import com.lauzhack.server.plot.PlotRegistry
+import com.lauzhack.server.routes.agentRoutes
 import com.lauzhack.server.routes.apiRoutes
 import io.ktor.http.CacheControl
 import io.ktor.http.HttpMethod
@@ -37,23 +41,35 @@ fun Application.module() {
         togetherApiKey = setting("ai.togetherApiKey"),
         ocrModelId = setting("ai.ocrModel") ?: error("ai.ocrModel missing"),
         hintModelId = setting("ai.hintModel") ?: error("ai.hintModel missing"),
+        agentModelId = setting("ai.agentModel") ?: error("ai.agentModel missing"),
         anthropicApiKey = setting("ai.anthropicApiKey"),
         reasoningModelId = setting("ai.reasoningModel") ?: error("ai.reasoningModel missing"),
     )
-    if (ai.ocrModel == null) environment.log.warn("TOGETHER_API_KEY not set: OCR and hints disabled")
+    if (ai.ocrModel == null) environment.log.warn("TOGETHER_API_KEY not set: OCR, hints and plots disabled")
     if (ai.reasoningModel == null) environment.log.warn("ANTHROPIC_API_KEY not set: reasoning model disabled")
     val ocr = OcrService(
         recognizer = ai.ocrModel?.let { KoogChunkRecognizer(ai.executor, it) },
         scope = this,
     )
     ocr.start(ChunkService.events)
+
+    // The page agent owns hint generation now: HintService keeps its state, anchors,
+    // dismissal and web UI, and receives hints via request()/complete().
     val hints = HintService(
-        generator = ai.hintModel?.let { KoogHintAgent(ai.executor, it) },
+        generator = null,
         scope = this,
         pageTranscription = ocr::snapshot,
         exercise = { id -> getDocument(id)?.exercise.orEmpty() },
     )
-    hints.start(ocr.events)
+    val plots = PlotRegistry()
+    val agent = AgentService(
+        agent = ai.agentModel?.let { KoogPageAgent(ai.executor, it, jsonConfig) },
+        ocr = ocr,
+        hints = hints,
+        plots = plots,
+        scope = this,
+    )
+    agent.start(ocr.events)
 
     install(ContentNegotiation) {
         json(jsonConfig)
@@ -82,6 +98,7 @@ fun Application.module() {
 
     routing {
         apiRoutes(ocr, hints)
+        agentRoutes(agent, plots)
         serveFrontendIfBuilt()
     }
 }

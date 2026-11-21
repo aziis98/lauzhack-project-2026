@@ -23,13 +23,16 @@ class AiModels(
     togetherApiKey: String?,
     ocrModelId: String,
     hintModelId: String,
+    agentModelId: String,
     anthropicApiKey: String?,
     reasoningModelId: String,
 ) {
     /** Together speaks the OpenAI Chat Completions protocol, so Koog's OpenAI client is pointed at it. */
     val ocrModel: LLModel? = togetherApiKey?.let { togetherModel(ocrModelId, vision = true) }
-
     val hintModel: LLModel? = togetherApiKey?.let { togetherModel(hintModelId, vision = false) }
+
+    /** The page agent (one call per changed page, structured actions out). */
+    val agentModel: LLModel? = togetherApiKey?.let { togetherModel(agentModelId, vision = false) }
 
     /**
      * Koog 1.3.0 has no constants for the newest Claude models, so the model is
