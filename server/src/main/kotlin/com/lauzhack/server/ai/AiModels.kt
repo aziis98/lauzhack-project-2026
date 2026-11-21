@@ -11,35 +11,25 @@ import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 
 /**
- * The two models the app uses, behind one Koog executor:
+ * The models the app uses, behind one Koog executor:
  *  - [ocrModel]: light vision model on **Together AI** (OpenAI-compatible API),
  *    transcribes chunk images;
- *  - [reasoningModel]: heavy model on **Anthropic**, does the math (hints, checks, recall).
+ *  - [hintModel]: model on **Together AI** that answers circled-"?" help requests;
+ *  - [reasoningModel]: heavy model on **Anthropic** (plots, checks, recall).
  *
  * Each is null when its API key is missing, so the app still runs without AI.
  */
 class AiModels(
     togetherApiKey: String?,
     ocrModelId: String,
+    hintModelId: String,
     anthropicApiKey: String?,
     reasoningModelId: String,
 ) {
     /** Together speaks the OpenAI Chat Completions protocol, so Koog's OpenAI client is pointed at it. */
-    val ocrModel: LLModel? = togetherApiKey?.let {
-        LLModel(
-            provider = LLMProvider.OpenAI,
-            id = ocrModelId,
-            capabilities = listOf(
-                LLMCapability.Completion,
-                LLMCapability.Vision.Image,
-                LLMCapability.OpenAIEndpoint.Completions,
-                // No Schema.JSON capability on purpose: Koog then asks for JSON in the
-                // prompt and parses it, which works with any Together model.
-            ),
-            contextLength = 128_000,
-            maxOutputTokens = 4_096,
-        )
-    }
+    val ocrModel: LLModel? = togetherApiKey?.let { togetherModel(ocrModelId, vision = true) }
+
+    val hintModel: LLModel? = togetherApiKey?.let { togetherModel(hintModelId, vision = false) }
 
     /**
      * Koog 1.3.0 has no constants for the newest Claude models, so the model is
@@ -85,5 +75,19 @@ class AiModels(
 
     companion object {
         const val TOGETHER_BASE_URL = "https://api.together.xyz"
+
+        private fun togetherModel(id: String, vision: Boolean) = LLModel(
+            provider = LLMProvider.OpenAI,
+            id = id,
+            capabilities = listOfNotNull(
+                LLMCapability.Completion,
+                LLMCapability.Vision.Image.takeIf { vision },
+                LLMCapability.OpenAIEndpoint.Completions,
+                // No Schema.JSON capability on purpose: Koog then asks for JSON in the
+                // prompt and parses it, which works with any Together model.
+            ),
+            contextLength = 128_000,
+            maxOutputTokens = 4_096,
+        )
     }
 }

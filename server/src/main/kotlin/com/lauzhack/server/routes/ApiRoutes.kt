@@ -1,6 +1,7 @@
 package com.lauzhack.server.routes
 
 import com.lauzhack.server.chunking.ChunkService
+import com.lauzhack.server.hint.HintService
 import com.lauzhack.server.ocr.ChunkRasterizer
 import com.lauzhack.server.ocr.OcrService
 import io.ktor.http.ContentType
@@ -29,7 +30,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 
-fun Route.apiRoutes(ocr: OcrService) {
+fun Route.apiRoutes(ocr: OcrService, hints: HintService) {
     route("/api/documents") {
         get {
             call.respond(listDocuments())
@@ -55,6 +56,7 @@ fun Route.apiRoutes(ocr: OcrService) {
                 if (deleteDocument(id)) {
                     ChunkService.forget(id)
                     ocr.forget(id)
+                    hints.forget(id)
                     call.respond(HttpStatusCode.NoContent)
                 } else {
                     call.respond(HttpStatusCode.NotFound)
@@ -85,6 +87,19 @@ fun Route.apiRoutes(ocr: OcrService) {
             }
 
             // Chunks with their OCR result (null = pending); debug/inspection.
+            // Hints answering circled "?" on the page (polled by the canvas).
+            route("hints") {
+                get {
+                    val id = call.parameters["id"]!!
+                    call.respond(hints.hints(id))
+                }
+                delete("{hid}") {
+                    val id = call.parameters["id"]!!
+                    val removed = hints.dismiss(id, call.parameters["hid"]!!)
+                    call.respond(if (removed) HttpStatusCode.NoContent else HttpStatusCode.NotFound)
+                }
+            }
+
             get("transcription") {
                 val id = call.parameters["id"]!!
                 if (getDocument(id) == null) {

@@ -37,6 +37,7 @@ private fun hiddenComponents(): dynamic {
     c.QuickActions = null    // left-side bar when a shape is selected
     c.HelperButtons = null   // "back to content" button
     c.ActionsMenu = null
+    c.OnTheCanvas = HintLayer // hint cards, in page coordinates
     return c
 }
 
@@ -94,6 +95,7 @@ private const val PAGE_HEIGHT = 4800.0
 private const val PAGE_GROW_MARGIN = 800.0
 
 val Canvas = FC<CanvasProps> { props ->
+    hintDocumentId = props.documentId
     Tldraw {
         components = hiddenComponents()
         options = singlePageOptions()

@@ -51,6 +51,15 @@ class ChunkRasterizerTest {
     }
 }
 
+/** Polls [condition] until true; fails after [timeoutMs]. Cold JVMs make Java2D/ImageIO slow on first use. */
+private suspend fun awaitUntil(timeoutMs: Long = 5000, condition: suspend () -> Boolean) {
+    val end = System.currentTimeMillis() + timeoutMs
+    while (!condition()) {
+        check(System.currentTimeMillis() < end) { "condition not met within ${timeoutMs}ms" }
+        delay(20)
+    }
+}
+
 class OcrServiceTest {
     private val scope = CoroutineScope(SupervisorJob())
     private val calls = AtomicInteger()
@@ -78,7 +87,7 @@ class OcrServiceTest {
         val ocr = service()
         val events = scope.record(ocr)
         ocr.handle(event(stroke("a", 0.0, 0.0)))
-        delay(300)
+        awaitUntil { events.count { it is TranscriptionEvent.Updated } == 2 }
 
         val updates = events.filterIsInstance<TranscriptionEvent.Updated>()
         assertEquals(2, updates.size)
@@ -94,7 +103,7 @@ class OcrServiceTest {
         val events = scope.record(ocr)
         ocr.handle(event(stroke("a", 0.0, 0.0)))
         ocr.handle(event(stroke("a", 0.0, 0.0), stroke("b", 40.0, 0.0)))
-        delay(300)
+        awaitUntil { calls.get() >= 1 }; delay(200) // let any extra (wrong) call happen
 
         assertEquals(1, calls.get())
         val done = events.filterIsInstance<TranscriptionEvent.Updated>().filter { it.chunk.transcription != null }
@@ -105,10 +114,10 @@ class OcrServiceTest {
     fun identicalContentIsServedFromCache() = runBlocking {
         val ocr = service()
         ocr.handle(event(stroke("a", 0.0, 0.0)))
-        delay(300)
+        awaitUntil { calls.get() >= 1 }
         ocr.handle(event(stroke("a", 0.0, 0.0), stroke("b", 40.0, 0.0))) // modify…
         ocr.handle(event(stroke("a", 0.0, 0.0)))                         // …and undo before OCR runs
-        delay(300)
+        delay(300); awaitUntil { ocr.snapshot("doc").singleOrNull()?.transcription != null }
         assertEquals(1, calls.get())
         assertEquals("x=1", ocr.snapshot("doc").single().transcription?.content)
     }
@@ -137,7 +146,7 @@ class OcrServiceTest {
     fun failuresAreLoggedAndLeaveTheChunkPending() = runBlocking {
         val ocr = service(rec = { error("model down") })
         ocr.handle(event(stroke("a", 0.0, 0.0)))
-        delay(300)
+        delay(300) // the recognizer throws right after the debounce
         assertNull(ocr.snapshot("doc").single().transcription)
     }
 }
