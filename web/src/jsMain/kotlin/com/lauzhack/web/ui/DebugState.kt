@@ -10,7 +10,7 @@ import com.lauzhack.shared.debug.DebugPayload
 internal object DebugState {
     var payload: DebugPayload? = null
 
-    var drawerOpen: Boolean = true
+    var drawerOpen: Boolean = false
 
     var showChunkBoxes: Boolean = true
     var showFragmentBoxes: Boolean = false

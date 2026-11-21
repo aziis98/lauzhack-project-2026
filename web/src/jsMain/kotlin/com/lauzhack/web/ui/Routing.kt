@@ -22,6 +22,7 @@ external object BrowserHistory {
 @JsName("window")
 external object Window {
     fun addEventListener(type: String, listener: (event: dynamic) -> Unit)
+    fun removeEventListener(type: String, listener: (event: dynamic) -> Unit)
 }
 
 /** Matches a 16-char lowercase hex short id. */
@@ -59,8 +60,7 @@ fun debugFromQuery(): Boolean =
 /** Keeps the ?debug flag across pushState navigations. */
 private fun withDebug(path: String): String = if (debugMode) "$path?debug" else path
 
-/** Sync the app to the browser's back/forward navigation (passes the raw path). */
-fun listenForPopState(onPath: (String) -> Unit) {
+/** Sync the app to the browser's back/forward navigation (passes the raw path). */fun listenForPopState(onPath: (String) -> Unit) {
     Window.addEventListener("popstate") { _ ->
         onPath(Location.pathname)
     }
