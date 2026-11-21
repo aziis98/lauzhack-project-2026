@@ -17,6 +17,9 @@ import web.cssom.ClassName
 /** Document currently open in the canvas. */
 internal var canvasDocumentId: String? = null
 
+/** Editor of the open canvas (for zoom while dragging hint cards). */
+internal var canvasEditor: com.lauzhack.web.tldraw.Editor? = null
+
 /** Current height of the page (it grows with the content). */
 internal var canvasPageHeight: Double = 0.0
 

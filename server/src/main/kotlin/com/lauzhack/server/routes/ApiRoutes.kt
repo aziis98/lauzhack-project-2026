@@ -93,6 +93,27 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService) {
                     val id = call.parameters["id"]!!
                     call.respond(hints.hints(id))
                 }
+                // Help button in the toolbar (no circled "?").
+                post {
+                    val id = call.parameters["id"]!!
+                    if (getDocument(id) == null) {
+                        call.respond(HttpStatusCode.NotFound)
+                        return@post
+                    }
+                    val hint = hints.request(id)
+                    if (hint == null) call.respond(HttpStatusCode.ServiceUnavailable) else call.respond(HttpStatusCode.Created, hint)
+                }
+                // "Another hint" for a card the student did not understand.
+                post("{hid}/more") {
+                    val hint = hints.more(call.parameters["id"]!!, call.parameters["hid"]!!)
+                    if (hint == null) call.respond(HttpStatusCode.NotFound) else call.respond(hint)
+                }
+                // The student dragged the card: { "x": …, "y": … } in page coordinates.
+                patch("{hid}/position") {
+                    val position = call.receive<com.lauzhack.shared.domain.Point>()
+                    val hint = hints.move(call.parameters["id"]!!, call.parameters["hid"]!!, position)
+                    if (hint == null) call.respond(HttpStatusCode.NotFound) else call.respond(hint)
+                }
                 delete("{hid}") {
                     val id = call.parameters["id"]!!
                     val removed = hints.dismiss(id, call.parameters["hid"]!!)

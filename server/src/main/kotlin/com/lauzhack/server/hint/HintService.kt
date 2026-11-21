@@ -1,6 +1,8 @@
 package com.lauzhack.server.hint
 
 import com.lauzhack.server.ocr.TranscriptionEvent
+import com.lauzhack.shared.chunking.BoundingBox
+import com.lauzhack.shared.domain.Point
 import com.lauzhack.shared.hint.Hint
 import com.lauzhack.shared.hint.HintStatus
 import com.lauzhack.shared.ocr.ChunkKind
@@ -63,6 +65,61 @@ class HintService(
         return s.mutex.withLock { s.hints.values.sortedBy { it.createdAt } }
     }
 
+    /**
+     * Help asked with the toolbar button (no circled ?). The card is anchored
+     * next to the lowest block of work, or near the top of an empty page.
+     * Returns null when hints are disabled.
+     */
+    suspend fun request(documentId: String): Hint? {
+        val generator = generator ?: return null
+        val lowest = pageTranscription(documentId).maxByOrNull { it.chunk.bounds.maxY }?.chunk?.bounds
+        val s = docs.computeIfAbsent(documentId) { DocState() }
+        return s.mutex.withLock {
+            val hint = Hint(
+                id = "hint-${s.nextId++}",
+                triggerChunkId = null,
+                anchor = lowest ?: BoundingBox(560.0, 320.0, 600.0, 360.0),
+                status = HintStatus.THINKING,
+                createdAt = clock(),
+            )
+            s.hints[hint.id] = hint
+            s.jobs[hint.id] = scope.launch { answer(documentId, s, hint, generator) }
+            log.info("doc {}: hint requested with the button ({})", documentId, hint.id)
+            hint
+        }
+    }
+
+    /**
+     * "Another hint": the student did not understand this one. The current card
+     * moves to [Hint.history] and a new, more concrete one is generated in the same box.
+     */
+    suspend fun more(documentId: String, hintId: String): Hint? {
+        val generator = generator ?: return null
+        val s = docs[documentId] ?: return null
+        return s.mutex.withLock {
+            val old = s.hints[hintId] ?: return@withLock null
+            if (old.status == HintStatus.THINKING) return@withLock old
+            val hint = old.copy(
+                status = HintStatus.THINKING,
+                history = old.history + listOfNotNull(old.card),
+                card = null,
+                error = null,
+            )
+            s.hints[hintId] = hint
+            s.jobs[hintId] = scope.launch { answer(documentId, s, hint, generator) }
+            hint
+        }
+    }
+
+    /** Stores where the student dragged the card (UI state only; the AI never sees it). */
+    suspend fun move(documentId: String, hintId: String, position: Point): Hint? {
+        val s = docs[documentId] ?: return null
+        return s.mutex.withLock {
+            val hint = s.hints[hintId] ?: return@withLock null
+            hint.copy(position = position).also { s.hints[hintId] = it }
+        }
+    }
+
     /** Removes a hint; it will not be generated again for the same circled ?. */
     suspend fun dismiss(documentId: String, hintId: String): Boolean {
         val s = docs[documentId] ?: return false
@@ -113,14 +170,15 @@ class HintService(
     private suspend fun answer(docId: String, s: DocState, hint: Hint, generator: HintGenerator) {
         val result = try {
             val page = settledPage(docId)
-            val trigger = page.find { it.chunk.id == hint.triggerChunkId }
-                ?: return // the circled ? is gone
+            val trigger = hint.triggerChunkId?.let { id ->
+                page.find { it.chunk.id == id } ?: return // the circled ? is gone
+            }
             val previous = s.mutex.withLock {
                 s.hints.values
                     .filter { it.id != hint.id && it.status == HintStatus.READY }
                     .sortedBy { it.createdAt }
                     .mapNotNull { it.card }
-            }
+            } + hint.history // what this box already said comes last: the next hint must go further
             val card = generator.generate(HintContext(page, trigger, previous, exercise(docId)))
             log.info("doc {} {}: {} — {}", docId, hint.id, card.title, card.message)
             hint.copy(status = HintStatus.READY, card = card)
@@ -131,7 +189,8 @@ class HintService(
             hint.copy(status = HintStatus.FAILED, error = "Couldn't generate a hint. Please try again.")
         }
         s.mutex.withLock {
-            if (s.hints.containsKey(hint.id)) s.hints[hint.id] = result
+            // keep a position the student set while the model was thinking
+            s.hints[hint.id]?.let { current -> s.hints[hint.id] = result.copy(position = current.position) }
             s.jobs.remove(hint.id)
         }
     }

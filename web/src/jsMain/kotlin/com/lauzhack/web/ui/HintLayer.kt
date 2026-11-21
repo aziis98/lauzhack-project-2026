@@ -22,9 +22,10 @@ private const val CARD_WIDTH = 280.0
 private const val CARD_GAP = 16.0
 
 /**
- * Hint cards for the circled "?" on the page. Mounted as tldraw's `OnTheCanvas`
- * component, so it lives in page coordinates: cards sit next to the "?" that
- * asked for them and pan/zoom with the page.
+ * Hint cards (circled "?" or the toolbar Help button). Mounted as tldraw's
+ * `OnTheCanvas` component, so they live in page coordinates and pan/zoom with
+ * the page. They sit above every stroke (see `.hint-card` z-index) and can be
+ * dragged; the position is saved on the server (UI only, never sent to the AI).
  */
 val HintLayer = FC<Props> {
     var hints by useState<List<Hint>>(emptyList())
@@ -40,14 +41,23 @@ val HintLayer = FC<Props> {
         }
     }
 
+    fun act(block: suspend (String) -> Unit) {
+        canvasDocumentId?.let { doc -> MainScope().launch { runCatching { block(doc) } } }
+    }
+
     for (hint in hints) {
         HintCardView {
             key = Key(hint.id)
             this.hint = hint
             onDismiss = {
                 hints = hints.filter { it.id != hint.id }
-                canvasDocumentId?.let { doc -> MainScope().launch { runCatching { hintApi.dismissHint(doc, hint.id) } } }
+                act { doc -> hintApi.dismissHint(doc, hint.id) }
             }
+            onMore = {
+                hints = hints.map { if (it.id == hint.id) it.copy(status = HintStatus.THINKING) else it }
+                act { doc -> hintApi.moreHint(doc, hint.id) }
+            }
+            onMoved = { x, y -> act { doc -> hintApi.moveHint(doc, hint.id, x, y) } }
         }
     }
 }
@@ -55,24 +65,54 @@ val HintLayer = FC<Props> {
 private external interface HintCardProps : Props {
     var hint: Hint
     var onDismiss: () -> Unit
+    var onMore: () -> Unit
+    var onMoved: (Double, Double) -> Unit
 }
 
 private val HintCardView = FC<HintCardProps> { props ->
     val hint = props.hint
     val anchor = hint.anchor
-    // Right of the "?", or left of it when there is no room before the page edge.
-    val left = if (anchor.maxX + CARD_GAP + CARD_WIDTH <= PAGE_WIDTH) anchor.maxX + CARD_GAP
+    // Default: right of the "?", or left of it when there is no room before the page edge.
+    val defaultLeft = if (anchor.maxX + CARD_GAP + CARD_WIDTH <= PAGE_WIDTH) anchor.maxX + CARD_GAP
     else maxOf(0.0, anchor.minX - CARD_GAP - CARD_WIDTH)
+    // Position while/after dragging, until the server echoes it back.
+    var dragged by useState<Pair<Double, Double>?>(null)
+    val (left, top) = dragged ?: hint.position?.let { it.x to it.y } ?: (defaultLeft to anchor.minY)
 
     ReactHTML.div {
         className = ClassName("hint-card hint-${hint.status.name.lowercase()}")
         val css: dynamic = js("({})")
         css.left = "${left}px"
-        css.top = "${anchor.minY}px"
+        css.top = "${top}px"
         css.width = "${CARD_WIDTH}px"
         asDynamic().style = css
-        // keep clicks on the card from starting a stroke on the canvas
-        onPointerDown = { it.stopPropagation() }
+
+        // Drag the card like a shape; clicks on its buttons are left alone.
+        onPointerDown = { event ->
+            event.stopPropagation() // never start a stroke under the card
+            val target: dynamic = event.target
+            if (target.closest("button") == null) {
+                event.preventDefault()
+                val zoom = canvasEditor?.getZoomLevel() ?: 1.0
+                val startX = event.clientX
+                val startY = event.clientY
+                var pos = left to top
+                val win: dynamic = js("window")
+                lateinit var onMove: (dynamic) -> Unit
+                lateinit var onUp: (dynamic) -> Unit
+                onMove = { e ->
+                    pos = (left + (e.clientX as Double - startX) / zoom) to (top + (e.clientY as Double - startY) / zoom)
+                    dragged = pos
+                }
+                onUp = { _ ->
+                    win.removeEventListener("pointermove", onMove)
+                    win.removeEventListener("pointerup", onUp)
+                    if (pos != (left to top)) props.onMoved(pos.first, pos.second)
+                }
+                win.addEventListener("pointermove", onMove)
+                win.addEventListener("pointerup", onUp)
+            }
+        }
 
         ReactHTML.div {
             className = ClassName("hint-head")
@@ -88,8 +128,9 @@ private val HintCardView = FC<HintCardProps> { props ->
             ReactHTML.button {
                 className = ClassName("hint-close")
                 title = "Close"
+                asDynamic()["aria-label"] = "Close hint"
                 onClick = { props.onDismiss() }
-                ReactHTML.span { className = ClassName("ph"); +"ph-x" }
+                +"✕"
             }
         }
 
@@ -104,6 +145,15 @@ private val HintCardView = FC<HintCardProps> { props ->
                         for (step in card.steps) ReactHTML.li { +step }
                     }
                 }
+            }
+        }
+
+        if (hint.status != HintStatus.THINKING) {
+            ReactHTML.button {
+                className = ClassName("hint-more")
+                onClick = { props.onMore() }
+                ReactHTML.span { className = ClassName("ph"); +"ph-question" }
+                +(if (hint.status == HintStatus.FAILED) "Try again" else "I don't get it — another hint")
             }
         }
     }

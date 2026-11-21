@@ -337,6 +337,8 @@ GET    /api/documents/{id}/chunks/{chunkId}/image.png  image sent to the OCR mod
 
 ### Hints (circled "?")
 
+Full description (Help button, draggable cards, "another hint", what the AI sees): [docs/hints.md](docs/hints.md).
+
 When the OCR classifies a chunk as `HINT_REQUEST` (a question mark drawn inside a
 circle), `HintService` waits for the rest of the page to be transcribed, then asks
 the hint agent (`KoogHintAgent`, `deepseek-ai/DeepSeek-V4.1-Flash` on Together AI,

@@ -496,13 +496,30 @@
 			border-radius: 6px;
 		}
 
+		/* AI hint cards: above every stroke (shapes share the layer and carry their own z-index) */
+		.hint-card { z-index: 2147483000; cursor: grab; user-select: none; touch-action: none; }
+		.hint-card:active { cursor: grabbing; }
+		.hint-close {
+			color: #fff !important; background: #e03131 !important;
+			border: var(--line) !important; border-radius: 6px;
+			box-shadow: var(--hard-sm); width: 28px; height: 28px; justify-content: center; align-items: center;
+		}
+		.hint-close { font-size: 15px; font-weight: 800; line-height: 1; display: flex; }
+		.hint-close:hover { background: #c92a2a !important; }
+		.hint-close:active { transform: translate(2px, 2px); box-shadow: none; }
+		.hint-more {
+			margin-top: 10px; width: 100%; display: flex; gap: 6px; align-items: center; justify-content: center;
+			padding: 7px 10px; font-weight: 600; font-size: 13px;
+			background: #fff; border: var(--line); border-radius: 8px; box-shadow: var(--hard-sm);
+		}
+		.hint-more:hover { background: var(--lilac); }
+		.hint-more:active { transform: translate(2px, 2px); box-shadow: none; }
+		.tool.help { background: var(--lilac); border: var(--line); font-weight: 800; }
 		/* AI hint cards */
 		.hint-card { background: var(--yellow); border-color: var(--ink); }
 		.hint-card.hint-failed { background: var(--pink); border-color: var(--ink); }
 		.hint-head .ph, .hint-failed .hint-head .ph, .hint-dots { color: var(--ink); }
 		.hint-steps { color: var(--ink); }
-		.hint-close { border: 1.5px solid transparent; }
-		.hint-close:hover { background: #fff; border: var(--line); }
 	</style>
 </head>
 <body>

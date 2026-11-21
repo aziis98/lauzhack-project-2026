@@ -103,6 +103,7 @@ val Canvas = FC<CanvasProps> { props ->
         options = singlePageOptions()
         onMount = { editor ->
             props.onReady?.invoke(editor)
+            canvasEditor = editor
 
             // ---- auto-growing page bounds: grow to fit content, never shrink ----
             var pageHeight = PAGE_HEIGHT

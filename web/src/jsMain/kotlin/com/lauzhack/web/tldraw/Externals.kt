@@ -34,6 +34,7 @@ external interface Editor {
     fun getCurrentPageBounds(): Box?
     fun setCameraOptions(opts: dynamic)
     fun undo()
+    fun getZoomLevel(): Double
     fun redo()
     fun setStyleForNextShapes(style: dynamic, value: dynamic)
     fun setStyleForSelectedShapes(style: dynamic, value: dynamic)
