@@ -1,5 +1,6 @@
 package com.lauzhack.server.routes
 
+import com.lauzhack.server.chunking.ChunkService
 import com.lauzhack.server.db.createDocument
 import com.lauzhack.server.db.createElement
 import com.lauzhack.server.db.deleteDocument
@@ -46,7 +47,22 @@ fun Route.apiRoutes() {
             }
             delete {
                 val id = call.parameters["id"]!!
-                if (deleteDocument(id)) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound)
+                if (deleteDocument(id)) {
+                    ChunkService.forget(id)
+                    call.respond(HttpStatusCode.NoContent)
+                } else {
+                    call.respond(HttpStatusCode.NotFound)
+                }
+            }
+
+            // Handwriting macro-blocks with page coordinates (debug/inspection; see shared/chunking).
+            get("chunks") {
+                val id = call.parameters["id"]!!
+                if (getDocument(id) == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(ChunkService.snapshot(id))
+                }
             }
 
             route("elements") {
@@ -65,6 +81,7 @@ fun Route.apiRoutes() {
                         call.respond(HttpStatusCode.NotFound)
                     } else {
                         replaceElements(id, elements)
+                        ChunkService.refresh(id)
                         call.respond(HttpStatusCode.OK, mapOf("count" to elements.size))
                     }
                 }
@@ -72,6 +89,7 @@ fun Route.apiRoutes() {
                     val id = call.parameters["id"]!!
                     val element = call.receive<Element>()
                     if (createElement(id, element)) {
+                        ChunkService.refresh(id)
                         call.respond(HttpStatusCode.Created, element)
                     } else {
                         call.respond(HttpStatusCode.NotFound)
@@ -84,12 +102,14 @@ fun Route.apiRoutes() {
                         val eid = call.parameters["eid"]!!
                         val element = call.receive<Element>()
                         val updated = updateElement(id, eid, element)
+                        if (updated != null) ChunkService.refresh(id)
                         if (updated == null) call.respond(HttpStatusCode.NotFound) else call.respond(updated)
                     }
                     delete {
                         val id = call.parameters["id"]!!
                         val eid = call.parameters["eid"]!!
                         if (deleteElement(id, eid)) {
+                            ChunkService.refresh(id)
                             call.respond(HttpStatusCode.NoContent)
                         } else {
                             call.respond(HttpStatusCode.NotFound)

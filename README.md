@@ -55,6 +55,21 @@ PATCH  /api/documents/{id}/elements/{eid}   replace one
 DELETE /api/documents/{id}/elements/{eid}   delete one
 ```
 
+### Handwriting chunks
+
+Every element write re-chunks the page: strokes are grouped into macro-blocks
+purely by spatial proximity (`shared/.../chunking`), and each block keeps a
+stable id across edits. Only blocks whose content hash changed are reported
+as modified, so downstream OCR/AI only re-processes what the user touched.
+
+```
+GET    /api/documents/{id}/chunks    [{ id, strokeIds, bounds, contentHash, version }]   (debug/inspection)
+```
+
+Inside the server, consumers (OCR, reasoning agent) subscribe to
+`ChunkService.updates(docId)`, which pushes `{ added, modified, removed }` after
+every write.
+
 Elements are polymorphic via the `kind` discriminator:
 
 ```json
