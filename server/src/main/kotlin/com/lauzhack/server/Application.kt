@@ -14,7 +14,6 @@ import com.lauzhack.server.exercise.KoogRegionConverter
 import com.lauzhack.server.routes.exerciseRoutes
 import kotlin.io.encoding.Base64
 import com.lauzhack.server.hint.HintService
-import com.lauzhack.server.hint.KoogHintAgent
 import com.lauzhack.server.ocr.KoogChunkRecognizer
 import com.lauzhack.server.ocr.OcrService
 import com.lauzhack.server.db.jsonConfig
@@ -46,7 +45,6 @@ fun Application.module() {
     val ai = AiModels(
         togetherApiKey = setting("ai.togetherApiKey"),
         ocrModelId = setting("ai.ocrModel") ?: error("ai.ocrModel missing"),
-        hintModelId = setting("ai.hintModel") ?: error("ai.hintModel missing"),
         agentModelId = setting("ai.agentModel") ?: error("ai.agentModel missing"),
     )
     if (ai.ocrModel == null) environment.log.warn("TOGETHER_API_KEY not set: OCR, hints and plots disabled")
@@ -60,10 +58,8 @@ fun Application.module() {
     ocr.start(ChunkService.events)
 
     val hints = HintService(
-        generator = null,
         scope = this,
         pageTranscription = ocr::snapshot,
-        exercise = { id -> getDocument(id)?.exercise.orEmpty() },
     )
     val agent = AgentService(
         agent = ai.agentModel?.let { KoogPageAgent(ai.executor, it, jsonConfig, reasoningEffort = agentEffort) },
@@ -75,6 +71,7 @@ fun Application.module() {
         hintLevel = { id -> getDocument(id)?.hintLevel ?: com.lauzhack.shared.hint.HintLevel.MEDIUM },
     )
     agent.start(ocr.events)
+    hints.start(ocr.events)
 
     install(ContentNegotiation) {
         json(jsonConfig)

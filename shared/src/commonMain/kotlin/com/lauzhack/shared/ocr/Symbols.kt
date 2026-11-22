@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
  * image segmentation, in image pixel space of the chunk rasterization.
  *
  * Fragments within the dilation radius are merged (e.g. the strokes of a
- * dotted ì, i or an equals sign); small specks are filtered out. The tight
+ * dotted i or an equals sign); small specks are filtered out. The tight
  * box is computed on the original ink, so it is not inflated by dilation.
  */
 @Serializable

@@ -11,7 +11,7 @@ data class CreateDocumentRequest(val name: String, val exercise: String = "")
  *
  * @property term the clicked word, or the LaTeX of the clicked formula
  * @property context the sentence around it (math as `$…$`), so the agent can tell
- *   which concept the word belongs to (e.g. "critici" in "punti critici")
+ *   which concept the word belongs to (e.g. "critical" in "critical points")
  * @property anchor page-space bounds of the clicked word, to place the card
  */
 @Serializable

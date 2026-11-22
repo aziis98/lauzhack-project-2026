@@ -58,7 +58,7 @@ internal val OCR_SYSTEM_PROMPT = """
       \bbox[12,34,80,61]{\int_0^1} \bbox[96,40,130,63]{x^2} \, dx = \bbox[148,44,190,66]{\frac{1}{3}}
       Use \\ to separate lines when there are several.
     - TEXT: plain text with inline math as ${'$'}...${'$'}, the math symbols inside bboxes:
-      Per il teorema di Rolle esiste ${'$'}\bbox[31,40,58,63]{c}${'$'} tale che ${'$'}\bbox[70,41,110,64]{f'(c)=0}${'$'}
+      By Rolle's theorem there exists ${'$'}\bbox[31,40,58,63]{c}${'$'} such that ${'$'}\bbox[70,41,110,64]{f'(c)=0}${'$'}
     - DRAWING: a short description of what is drawn (no bboxes needed).
     - HINT_REQUEST, QUESTION_MARK, UNREADABLE: empty string.
 
@@ -134,7 +134,7 @@ class KoogChunkRecognizer(
             ),
             OcrOutput(
                 ChunkKind.TEXT,
-                "Per il teorema di Rolle esiste ${'$'}\\bbox[31,40,58,63]{c}${'$'} tale che ${'$'}\\bbox[70,41,110,64]{f'(c)=0}${'$'}",
+                "By Rolle's theorem there exists ${'$'}\\bbox[31,40,58,63]{c}${'$'} such that ${'$'}\\bbox[70,41,110,64]{f'(c)=0}${'$'}",
             ),
             OcrOutput(ChunkKind.HINT_REQUEST, ""),
         )

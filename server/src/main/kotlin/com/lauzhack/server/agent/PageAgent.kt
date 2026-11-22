@@ -69,7 +69,7 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
       REQUEST = { "requestId": "hint-4", "kind": "button" | "more" | "define",
                   "nearChunkId": "chunk-9", "triggerChunkId": "chunk-7",
                   "previousHints": [ "title: message", ... ],
-                  "term": "critici", "context": "Determinare i punti critici di ${'$'}f${'$'}." }
+                  "term": "critical", "context": "Find the critical points of ${'$'}f${'$'}." }
                                                                   // fields may be null/empty
 
       "requests" lists EXPLICIT help requests made since your previous turn (usually
@@ -157,9 +157,9 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
          the EXERCISE STATEMENT and wants to know what it means. "term" is exactly what
          they clicked; "context" is the sentence around it.
          * First work out WHICH CONCEPT they mean: a word is often part of a longer
-           term — "critici" in "punti critici" means "critical point", "massimo" in
-           "massimo relativo" means "local maximum", "inscritto" in "rettangolo
-           inscritto in una semicirconferenza" means "inscribed". Clarify that whole
+           term — "critical" in "critical points" means "critical point", "relative" in
+           "relative maximum" means "local maximum", "inscribed" in "rectangle
+           inscribed in a semicircle" means "inscribed". Clarify that whole
            concept, as it is used in THIS sentence, not the isolated word.
          * "title": the concept's name. The definition is always correct, in plain
            words with Unicode math; for a formula, say what it denotes and how to
@@ -172,7 +172,7 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
              example, no "steps".
            - GUIDED — the definition as in MEDIUM, plus ONE concrete example in
              "steps" (1-2 items), on a simple case other than the exercise itself.
-           Example — "critici" in "Determinare i punti critici di f":
+           Example — "critical" in "Find the critical points of f":
              MINIMAL: "A point where f'(x) = 0 or f' does not exist."
              MEDIUM:  "A critical point of f is a point x of its domain where f'(x) = 0
                        or f is not differentiable. Inside an interval, maxima and minima

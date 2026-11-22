@@ -38,10 +38,6 @@ class SymbolAnnotator(
     /** Components with fewer original-ink pixels than this are dropped as noise. */
     private val minArea: Int = 80,
 ) {
-    init {
-        System.setProperty("java.awt.headless", "true")
-    }
-
     /** Segments a chunk PNG. Returns empty for unreadable or blank images. */
     fun annotate(png: ByteArray): List<SymbolFragment> {
         val image = runCatching { ImageIO.read(ByteArrayInputStream(png)) }.getOrNull()
@@ -167,6 +163,10 @@ class SymbolAnnotator(
     }
 
     private companion object {
+        init {
+            System.setProperty("java.awt.headless", "true")
+        }
+
         val PALETTE = listOf(
             Color(0xE63946), // red
             Color(0x2563EB), // blue

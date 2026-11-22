@@ -27,10 +27,6 @@ class ChunkRasterizer(
     private val maxSidePx: Int = 1568,
     private val paddingPx: Int = 16,
 ) {
-    init {
-        System.setProperty("java.awt.headless", "true")
-    }
-
     /** The scale and padding [render] uses for these bounds (image px → chunk-local page units). */
     fun rasterParams(bounds: BoundingBox): Pair<Double, Int> {
         val longest = max(bounds.width, bounds.height).coerceAtLeast(1.0)
@@ -77,6 +73,12 @@ class ChunkRasterizer(
         return ByteArrayOutputStream().use { out ->
             ImageIO.write(image, "png", out)
             out.toByteArray()
+        }
+    }
+
+    private companion object {
+        init {
+            System.setProperty("java.awt.headless", "true")
         }
     }
 }

@@ -37,7 +37,7 @@ Open a new document from the home list, then:
    to the winning rectangle in the figure.
 4. **Punchline** — write the answer big: *max area = 1, reached at x = 1/√2 — the
    rectangle is 2:1, literally two squares side by side.*
-5. **The "Osservazione"** — in a contrasting color, add the trigonometry path
+5. **The "Observation"** — in a contrasting color, add the trigonometry path
    (below): no derivative at all.
 6. **Product flex mid-demo** — reload the page: everything is still there
    (autosave → backend → SQLite, visible persistence). Keyboard shortcuts
@@ -79,7 +79,7 @@ A(0) = 0,    A(1) = 0,    A(1/√2) = 2 · (1/√2) · (1/√2) = 1
 
 ---
 
-## Osservazione — the no-calculus path (different parametrization)
+## Observation — the no-calculus path (different parametrization)
 
 Parametrize instead by the angle `θ` of the top corner (from the center):
 

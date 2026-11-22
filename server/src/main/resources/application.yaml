@@ -10,8 +10,6 @@ ai:
   # OCR: light vision model on Together AI. Without TOGETHER_API_KEY chunks stay un-transcribed.
   togetherApiKey: "$TOGETHER_API_KEY:"
   ocrModel: "$OCR_MODEL:deepseek-ai/DeepSeek-V4.1-Flash-1017"
-  # Hints for the circled "?": also on Together AI.
-  hintModel: "$HINT_MODEL:deepseek-ai/DeepSeek-V4.1-Flash"
   # The page agent (actions list: hint / plot). No true "medium" tier is available
   # serverless on Together: Flash is the fast default, V4-Pro-0813 the heavy option.
   agentModel: "$AGENT_MODEL:deepseek-ai/DeepSeek-V4.1-Flash"

@@ -116,7 +116,7 @@ class SymbolAnnotatorTest {
 
     @Test
     fun stripBboxesLeavesPlainContentAlone() {
-        val plain = "Per il teorema di Rolle esiste \$c\$ tale che \$f'(c)=0\$"
+        val plain = "By Rolle's theorem there exists \$c\$ such that \$f'(c)=0\$"
         assertEquals(plain, plain.stripBboxes())
     }
 }

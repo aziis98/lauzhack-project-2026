@@ -1,7 +1,7 @@
 package com.lauzhack.server.routes
 
 import com.lauzhack.server.agent.AgentService
-import com.lauzhack.server.db.getDocument
+import com.lauzhack.server.db.resolveDocument
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.response.respond
@@ -23,27 +23,26 @@ import io.ktor.server.routing.route
 fun Route.agentRoutes(actions: AgentService) {
     route("/api/documents/{id}") {
         get("actions") {
-            val id = call.parameters["id"]!!
-            if (getDocument(id) == null) call.respond(HttpStatusCode.NotFound)
-            else call.respond(actions.snapshot(id))
+            val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
+            call.respond(actions.snapshot(id))
         }
 
         get("conversation") {
-            val id = call.parameters["id"]!!
-            if (getDocument(id) == null) call.respond(HttpStatusCode.NotFound)
-            else call.respond(actions.conversation(id))
+            val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
+            call.respond(actions.conversation(id))
         }
 
         get("plots") {
-            val id = call.parameters["id"]!!
-            if (getDocument(id) == null) call.respond(HttpStatusCode.NotFound)
-            else call.respond(actions.plots(id))
+            val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
+            call.respond(actions.plots(id))
         }
 
         get("errors") {
-            val id = call.parameters["id"]!!
-            if (getDocument(id) == null) call.respond(HttpStatusCode.NotFound)
-            else call.respond(actions.errors(id))
+            val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
+            call.respond(actions.errors(id))
         }
     }
 }
+
+/** Resolves a full id or a 16-hex short id to the document's full id, or null when unknown. */
+private fun resolveId(id: String): String? = resolveDocument(id)?.id

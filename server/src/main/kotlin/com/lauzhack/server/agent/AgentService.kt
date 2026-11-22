@@ -18,6 +18,7 @@ import com.lauzhack.shared.chunking.BoundingBox
 import com.lauzhack.shared.hint.Hint
 import com.lauzhack.shared.hint.HintCard
 import com.lauzhack.shared.hint.HintLevel
+import com.lauzhack.shared.ocr.stripBboxes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -30,7 +31,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
@@ -96,7 +96,7 @@ class AgentService(
      * work the student is on now. Null when hints are disabled.
      */
     suspend fun requestHelp(documentId: String): Hint? {
-        if (agent == null) return hints.request(documentId) // legacy generator, if configured
+        if (agent == null) return null
         val hint = hints.reserveButtonHint(documentId)
         val lowest = ocr.snapshot(documentId).maxByOrNull { it.chunk.bounds.maxY }?.chunk?.id
         enqueue(documentId, HelpRequest(requestId = hint.id, kind = "button", nearChunkId = lowest))
@@ -123,7 +123,7 @@ class AgentService(
      * the same card with a more concrete hint. Null when the hint is unknown.
      */
     suspend fun requestMoreHelp(documentId: String, hintId: String): Hint? {
-        if (agent == null) return hints.more(documentId, hintId)
+        if (agent == null) return null
         val (hint, fresh) = hints.reserveMore(documentId, hintId) ?: return null
         if (fresh) {
             enqueue(
@@ -179,7 +179,7 @@ class AgentService(
                     val transcription = event.chunk.transcription ?: return@withLock
                     val chunk = event.chunk.chunk
                     val rawContent = transcription.content
-                    val cleanContent = if (rawContent.isNotEmpty()) stripBboxes(rawContent) else rawContent
+                    val cleanContent = if (rawContent.isNotEmpty()) rawContent.stripBboxes().trim() else rawContent
                     val pc = PageChunk(
                         id = chunk.id,
                         minX = chunk.bounds.minX,
@@ -422,7 +422,7 @@ class AgentService(
 
     private fun com.lauzhack.shared.ocr.TranscribedChunk.toPageChunk(): PageChunk {
         val rawContent = transcription?.content.orEmpty()
-        val clean = if (rawContent.isNotEmpty()) stripBboxes(rawContent) else rawContent
+        val clean = if (rawContent.isNotEmpty()) rawContent.stripBboxes().trim() else rawContent
         return PageChunk(
             id = chunk.id,
             minX = chunk.bounds.minX,
@@ -435,40 +435,6 @@ class AgentService(
         )
     }
 
-    companion object {
-        /**
-         * Strips \bbox[a,b,c,d]{…} markers (the OCR pipeline's per-glyph bounding
-         * boxes) keeping the inner content, with proper brace matching for nested
-         * LaTeX. Deterministic Kotlin — the model never has to do the stripping.
-         */
-        fun stripBboxes(text: String): String {
-            val sb = StringBuilder(text.length)
-            var i = 0
-            while (i < text.length) {
-                if (text.startsWith("\\bbox[", i)) {
-                    val bracketEnd = text.indexOf(']', i)
-                    if (bracketEnd > 0 && bracketEnd + 1 < text.length && text[bracketEnd + 1] == '{') {
-                        var depth = 1
-                        var j = bracketEnd + 2
-                        while (j < text.length && depth > 0) {
-                            if (text[j] == '{') depth++
-                            else if (text[j] == '}') depth--
-                            j++
-                        }
-                        sb.append(text, bracketEnd + 2, j - 1)
-                        i = j
-                    } else {
-                        sb.append(text[i])
-                        i++
-                    }
-                } else {
-                    sb.append(text[i])
-                    i++
-                }
-            }
-            return sb.toString().trim()
-        }
-    }
 
     fun forget(documentId: String) {
         docs.remove(documentId)?.job?.cancel()
@@ -512,9 +478,9 @@ class AgentService(
     private val plotRegistry = java.util.concurrent.ConcurrentHashMap<String, LinkedHashMap<String, PlotWithAnchor>>()
 
     /** The plots currently active for the document, in answer order. */
-    fun plots(documentId: String): List<PlotWithAnchor> {
+    suspend fun plots(documentId: String): List<PlotWithAnchor> {
         val s = docs.computeIfAbsent(documentId) { DocState() }
-        runBlocking { s.mutex.withLock { ensureRestoredLocked(documentId, s) } }
+        s.mutex.withLock { ensureRestoredLocked(documentId, s) }
         return synchronized(plotRegistry) { plotRegistry[documentId]?.values?.toList() ?: emptyList() }
     }
 

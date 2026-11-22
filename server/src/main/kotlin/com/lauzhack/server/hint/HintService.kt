@@ -6,42 +6,26 @@ import com.lauzhack.shared.domain.Point
 import com.lauzhack.shared.hint.Hint
 import com.lauzhack.shared.hint.HintCard
 import com.lauzhack.shared.hint.HintStatus
-import com.lauzhack.shared.ocr.ChunkKind
 import com.lauzhack.shared.ocr.TranscribedChunk
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Watches OCR results and answers every circled "?" ([ChunkKind.HINT_REQUEST])
- * with a hint from [generator].
+ * Holds the hint cards shown on a page. The page agent decides what each card
+ * says and reserves/fills it here; this class owns the card lifecycle (reserve,
+ * complete, fail, move, dismiss) and removes a card when its circled "?" is erased.
  *
- * - A request is answered once per content: redrawing the same circled ? does
- *   not ask again; a dismissed hint does not come back.
- * - Before asking the model it waits (up to [settleTimeoutMillis]) for the rest
- *   of the page to be transcribed, so the hint sees the latest work.
- * - Erasing the circled ? removes its hint.
- * - Hints already given on the page are passed along, so asking again gets a
- *   more concrete hint.
- *
- * @param generator null disables hints (no API key).
  * @param pageTranscription current chunks + transcriptions of a document (OcrService.snapshot).
  */
 class HintService(
-    private val generator: HintGenerator?,
     private val scope: CoroutineScope,
     private val pageTranscription: suspend (documentId: String) -> List<TranscribedChunk>,
-    private val exercise: suspend (documentId: String) -> String = { "" },
-    private val settleTimeoutMillis: Long = 6000,
-    private val settlePollMillis: Long = 300,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val log = LoggerFactory.getLogger(HintService::class.java)
@@ -49,7 +33,6 @@ class HintService(
     private class DocState {
         val mutex = Mutex()
         val hints = LinkedHashMap<String, Hint>()
-        val jobs = HashMap<String, Job>()
         /** Content hashes of circled ? already answered (or dismissed). */
         val handled = HashSet<String>()
         var nextId = 1
@@ -64,33 +47,6 @@ class HintService(
     suspend fun hints(documentId: String): List<Hint> {
         val s = docs[documentId] ?: return emptyList()
         return s.mutex.withLock { s.hints.values.sortedBy { it.createdAt } }
-    }
-
-    /**
-     * Help asked with the toolbar button (no circled ?), answered by the legacy
-     * generator. Returns null when it is disabled (the page agent path uses
-     * [reserveButtonHint] instead).
-     */
-    suspend fun request(documentId: String): Hint? {
-        val generator = generator ?: return null
-        val hint = reserveButtonHint(documentId)
-        val s = docs.getValue(documentId)
-        s.mutex.withLock { s.jobs[hint.id] = scope.launch { answer(documentId, s, hint, generator) } }
-        return hint
-    }
-
-    /**
-     * "Another hint" answered by the legacy generator; null when it is disabled
-     * or the hint is unknown (the page agent path uses [reserveMore]).
-     */
-    suspend fun more(documentId: String, hintId: String): Hint? {
-        val generator = generator ?: return null
-        val (hint, fresh) = reserveMore(documentId, hintId) ?: return null
-        if (fresh) {
-            val s = docs.getValue(documentId)
-            s.mutex.withLock { s.jobs[hintId] = scope.launch { answer(documentId, s, hint, generator) } }
-        }
-        return hint
     }
 
     /**
@@ -156,98 +112,29 @@ class HintService(
     /** Removes a hint; it will not be generated again for the same circled ?. */
     suspend fun dismiss(documentId: String, hintId: String): Boolean {
         val s = docs[documentId] ?: return false
-        return s.mutex.withLock {
-            s.jobs.remove(hintId)?.cancel()
-            s.hints.remove(hintId) != null
-        }
+        return s.mutex.withLock { s.hints.remove(hintId) != null }
     }
 
+    /** Removes the cards whose circled "?" chunk disappeared (erased). */
     suspend fun handle(event: TranscriptionEvent) {
-        val s = docs.computeIfAbsent(event.documentId) { DocState() }
-        s.mutex.withLock {
-            when (event) {
-                is TranscriptionEvent.Removed -> removeForTrigger(s, event.chunkId)
-                is TranscriptionEvent.Updated -> {
-                    if (generator == null) return@withLock // the page agent adopts hints instead
-                    val chunk = event.chunk.chunk
-                    val kind = event.chunk.transcription?.kind ?: return@withLock // OCR pending
-                    if (kind != ChunkKind.HINT_REQUEST) {
-                        removeForTrigger(s, chunk.id) // it was a circled ?, not anymore
-                        return@withLock
-                    }
-                    if (!s.handled.add(chunk.contentHash)) return@withLock
-                    removeForTrigger(s, chunk.id) // older answer to a previous version
-                    val hint = Hint(
-                        id = "hint-${s.nextId++}",
-                        triggerChunkId = chunk.id,
-                        anchor = chunk.bounds,
-                        status = HintStatus.THINKING,
-                        createdAt = clock(),
-                    )
-                    s.hints[hint.id] = hint
-                    s.jobs[hint.id] = scope.launch { answer(event.documentId, s, hint, generator) }
-                    log.info("doc {}: hint requested at {} ({})", event.documentId, chunk.id, hint.id)
-                }
-            }
-        }
+        if (event !is TranscriptionEvent.Removed) return
+        val s = docs[event.documentId] ?: return
+        s.mutex.withLock { removeForTrigger(s, event.chunkId) }
     }
 
     private fun removeForTrigger(s: DocState, chunkId: String) {
         val ids = s.hints.values.filter { it.triggerChunkId == chunkId }.map { it.id }
-        for (id in ids) {
-            s.jobs.remove(id)?.cancel()
-            s.hints.remove(id)
-        }
+        for (id in ids) s.hints.remove(id)
     }
-
-    private suspend fun answer(docId: String, s: DocState, hint: Hint, generator: HintGenerator) {
-        val result = try {
-            val page = settledPage(docId)
-            val trigger = hint.triggerChunkId?.let { id ->
-                page.find { it.chunk.id == id } ?: return // the circled ? is gone
-            }
-            val previous = s.mutex.withLock {
-                s.hints.values
-                    .filter { it.id != hint.id && it.status == HintStatus.READY }
-                    .sortedBy { it.createdAt }
-                    .mapNotNull { it.card }
-            } + hint.history // what this box already said comes last: the next hint must go further
-            val card = generator.generate(HintContext(page, trigger, previous, exercise(docId)))
-            log.info("doc {} {}: {} — {}", docId, hint.id, card.title, card.message)
-            hint.copy(status = HintStatus.READY, card = card)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            log.warn("hint {} failed for doc {}: {}", hint.id, docId, e.message)
-            hint.copy(status = HintStatus.FAILED, error = "Couldn't generate a hint. Please try again.")
-        }
-        s.mutex.withLock {
-            // keep a position the student set while the model was thinking
-            s.hints[hint.id]?.let { current -> s.hints[hint.id] = result.copy(position = current.position) }
-            s.jobs.remove(hint.id)
-        }
-    }
-
-    /** The page once every chunk is transcribed, or as it is after the timeout. */
-    private suspend fun settledPage(docId: String): List<TranscribedChunk> =
-        withTimeoutOrNull(settleTimeoutMillis) {
-            var page = pageTranscription(docId)
-            while (page.any { it.transcription == null }) {
-                delay(settlePollMillis)
-                page = pageTranscription(docId)
-            }
-            page
-        } ?: pageTranscription(docId)
 
     fun forget(documentId: String) {
-        docs.remove(documentId)?.jobs?.values?.forEach { it.cancel() }
+        docs.remove(documentId)
     }
 
     /**
      * Adoption path used by the page agent: reserve a THINKING hint for a circled
      * "?" without calling any model. Returns the hint id, or null when this exact
-     * content was already answered (or its hint dismissed) — the same semantics as
-     * [handle] gives the generator path.
+     * content was already answered (or its hint dismissed).
      */
     suspend fun request(documentId: String, triggerChunkId: String, contentHash: String, anchor: BoundingBox): String? {
         val s = docs.computeIfAbsent(documentId) { DocState() }

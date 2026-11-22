@@ -12,7 +12,6 @@ import ai.koog.prompt.llm.LLModel
  * The models the app uses, behind one Koog executor:
  *  - [ocrModel]: light vision model on **Together AI** (OpenAI-compatible API),
  *    transcribes chunk images;
- *  - [hintModel]: model on **Together AI** that answers circled-"?" help requests;
  *  - [agentModel]: the page agent, one structured call per settled page.
  *
  * Each is null when the API key is missing, so the app still runs without AI.
@@ -20,12 +19,10 @@ import ai.koog.prompt.llm.LLModel
 class AiModels(
     togetherApiKey: String?,
     ocrModelId: String,
-    hintModelId: String,
     agentModelId: String,
 ) {
     /** Together speaks the OpenAI Chat Completions protocol, so Koog's OpenAI client is pointed at it. */
     val ocrModel: LLModel? = togetherApiKey?.let { togetherModel(ocrModelId, vision = true) }
-    val hintModel: LLModel? = togetherApiKey?.let { togetherModel(hintModelId, vision = false) }
 
     /** The page agent (one call per changed page, structured actions out). */
     val agentModel: LLModel? = togetherApiKey?.let { togetherModel(agentModelId, vision = false) }

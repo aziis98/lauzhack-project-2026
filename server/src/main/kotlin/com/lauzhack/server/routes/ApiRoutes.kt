@@ -45,6 +45,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 
+/** Resolves a full id or a 16-hex short id to the document's full id, or null when unknown. */
+private fun resolveId(id: String): String? = resolveDocument(id)?.id
+
 fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
     route("/api/documents") {
         get {
@@ -69,13 +72,13 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
             }
             // The hint detail slider: { "level": "MINIMAL" | "MEDIUM" | "GUIDED" }
             patch("hint-level") {
-                val id = call.parameters["id"]!!
+                val id = resolveId(call.parameters["id"]!!) ?: return@patch call.respond(HttpStatusCode.NotFound)
                 val request = call.receive<com.lauzhack.shared.dto.SetHintLevelRequest>()
                 val doc = com.lauzhack.server.db.setHintLevel(id, request.level)
                 if (doc == null) call.respond(HttpStatusCode.NotFound) else call.respond(doc)
             }
             delete {
-                val id = call.parameters["id"]!!
+                val id = resolveId(call.parameters["id"]!!) ?: return@delete call.respond(HttpStatusCode.NotFound)
                 if (deleteDocument(id)) {
                     ChunkService.forget(id)
                     ocr.forget(id)
@@ -88,17 +91,13 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
 
             // Handwriting macro-blocks with page coordinates (debug/inspection; see shared/chunking).
             get("chunks") {
-                val id = call.parameters["id"]!!
-                if (getDocument(id) == null) {
-                    call.respond(HttpStatusCode.NotFound)
-                } else {
-                    call.respond(ChunkService.snapshot(id))
-                }
+                val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
+                call.respond(ChunkService.snapshot(id))
             }
 
             // The exact image the OCR model receives for one chunk; debug/inspection.
             get("chunks/{cid}/image.png") {
-                val id = call.parameters["id"]!!
+                val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
                 val chunk = chunkOf(id, call.parameters["cid"])
                     ?: return@get call.respond(HttpStatusCode.NotFound)
                 call.respondBytes(chunkPng(id, chunk), ContentType.Image.PNG)
@@ -106,7 +105,7 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
 
             // Symbol fragments detected by pre-OCR segmentation; debug/inspection.
             get("chunks/{cid}/symbols") {
-                val id = call.parameters["id"]!!
+                val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
                 val chunk = chunkOf(id, call.parameters["cid"])
                     ?: return@get call.respond(HttpStatusCode.NotFound)
                 call.respond(SymbolAnnotator().annotate(chunkPng(id, chunk)))
@@ -114,7 +113,7 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
 
             // The chunk image with the segmentation painted over the ink; debug/inspection.
             get("chunks/{cid}/annotated.png") {
-                val id = call.parameters["id"]!!
+                val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
                 val chunk = chunkOf(id, call.parameters["cid"])
                     ?: return@get call.respond(HttpStatusCode.NotFound)
                 val png = chunkPng(id, chunk)
@@ -124,7 +123,7 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
 
             // The chunk image exactly as sent to the OCR model: light gray behind each bbox; debug/inspection.
             get("chunks/{cid}/washed.png") {
-                val id = call.parameters["id"]!!
+                val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
                 val chunk = chunkOf(id, call.parameters["cid"])
                     ?: return@get call.respond(HttpStatusCode.NotFound)
                 val png = chunkPng(id, chunk)
@@ -135,36 +134,28 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
 
             // Wire-level debug view: agent conversation, OCR prompts, chunks, hints (?debug mode).
             get("debug") {
-                val id = call.parameters["id"]!!
-                if (getDocument(id) == null) {
-                    call.respond(HttpStatusCode.NotFound)
-                } else {
-                    call.respond(debugPayload(id, ocr, hints, agent))
-                }
+                val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
+                call.respond(debugPayload(id, ocr, hints, agent))
             }
 
             // Chunks with their OCR result (null = pending); debug/inspection.
             // Hints answering circled "?" on the page (polled by the canvas).
             route("hints") {
                 get {
-                    val id = call.parameters["id"]!!
+                    val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
                     call.respond(hints.hints(id))
                 }
                 // Help button in the toolbar (no circled "?").
                 post {
-                    val id = call.parameters["id"]!!
-                    if (getDocument(id) == null) {
-                        call.respond(HttpStatusCode.NotFound)
-                        return@post
-                    }
+                    val id = resolveId(call.parameters["id"]!!) ?: return@post call.respond(HttpStatusCode.NotFound)
                     val hint = agent.requestHelp(id)
                     if (hint == null) call.respond(HttpStatusCode.ServiceUnavailable) else call.respond(HttpStatusCode.Created, hint)
                 }
                 // The student clicked a word or formula of the exercise statement.
                 post("define") {
-                    val id = call.parameters["id"]!!
+                    val id = resolveId(call.parameters["id"]!!) ?: return@post call.respond(HttpStatusCode.NotFound)
                     val request = call.receive<com.lauzhack.shared.dto.DefineTermRequest>()
-                    if (getDocument(id) == null || request.term.isBlank()) {
+                    if (request.term.isBlank()) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@post
                     }
@@ -173,53 +164,43 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
                 }
                 // "Another hint" for a card the student did not understand.
                 post("{hid}/more") {
-                    val hint = agent.requestMoreHelp(call.parameters["id"]!!, call.parameters["hid"]!!)
+                    val id = resolveId(call.parameters["id"]!!) ?: return@post call.respond(HttpStatusCode.NotFound)
+                    val hint = agent.requestMoreHelp(id, call.parameters["hid"]!!)
                     if (hint == null) call.respond(HttpStatusCode.NotFound) else call.respond(hint)
                 }
                 // The student dragged the card: { "x": …, "y": … } in page coordinates.
                 patch("{hid}/position") {
+                    val id = resolveId(call.parameters["id"]!!) ?: return@patch call.respond(HttpStatusCode.NotFound)
                     val position = call.receive<com.lauzhack.shared.domain.Point>()
-                    val hint = hints.move(call.parameters["id"]!!, call.parameters["hid"]!!, position)
+                    val hint = hints.move(id, call.parameters["hid"]!!, position)
                     if (hint == null) call.respond(HttpStatusCode.NotFound) else call.respond(hint)
                 }
                 delete("{hid}") {
-                    val id = call.parameters["id"]!!
+                    val id = resolveId(call.parameters["id"]!!) ?: return@delete call.respond(HttpStatusCode.NotFound)
                     val removed = hints.dismiss(id, call.parameters["hid"]!!)
                     call.respond(if (removed) HttpStatusCode.NoContent else HttpStatusCode.NotFound)
                 }
             }
 
             get("transcription") {
-                val id = call.parameters["id"]!!
-                if (getDocument(id) == null) {
-                    call.respond(HttpStatusCode.NotFound)
-                } else {
-                    call.respond(ChunkService.snapshot(id).map { TranscribedChunk(it, ocr.cached(it.contentHash)) })
-                }
+                val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
+                call.respond(ChunkService.snapshot(id).map { TranscribedChunk(it, ocr.cached(it.contentHash)) })
             }
 
             route("elements") {
                 get {
-                    val id = call.parameters["id"]!!
-                    if (getDocument(id) == null) {
-                        call.respond(HttpStatusCode.NotFound)
-                    } else {
-                        call.respond(listElements(id))
-                    }
+                    val id = resolveId(call.parameters["id"]!!) ?: return@get call.respond(HttpStatusCode.NotFound)
+                    call.respond(listElements(id))
                 }
                 put {
-                    val id = call.parameters["id"]!!
+                    val id = resolveId(call.parameters["id"]!!) ?: return@put call.respond(HttpStatusCode.NotFound)
                     val elements = call.receive<List<Element>>()
-                    if (getDocument(id) == null) {
-                        call.respond(HttpStatusCode.NotFound)
-                    } else {
-                        replaceElements(id, elements)
-                        ChunkService.refresh(id)
-                        call.respond(HttpStatusCode.OK, mapOf("count" to elements.size))
-                    }
+                    replaceElements(id, elements)
+                    ChunkService.refresh(id)
+                    call.respond(HttpStatusCode.OK, mapOf("count" to elements.size))
                 }
                 post {
-                    val id = call.parameters["id"]!!
+                    val id = resolveId(call.parameters["id"]!!) ?: return@post call.respond(HttpStatusCode.NotFound)
                     val element = call.receive<Element>()
                     if (createElement(id, element)) {
                         ChunkService.refresh(id)
@@ -231,7 +212,7 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
 
                 route("{eid}") {
                     patch {
-                        val id = call.parameters["id"]!!
+                        val id = resolveId(call.parameters["id"]!!) ?: return@patch call.respond(HttpStatusCode.NotFound)
                         val eid = call.parameters["eid"]!!
                         val element = call.receive<Element>()
                         val updated = updateElement(id, eid, element)
@@ -239,7 +220,7 @@ fun Route.apiRoutes(ocr: OcrService, hints: HintService, agent: AgentService) {
                         if (updated == null) call.respond(HttpStatusCode.NotFound) else call.respond(updated)
                     }
                     delete {
-                        val id = call.parameters["id"]!!
+                        val id = resolveId(call.parameters["id"]!!) ?: return@delete call.respond(HttpStatusCode.NotFound)
                         val eid = call.parameters["eid"]!!
                         if (deleteElement(id, eid)) {
                             ChunkService.refresh(id)
