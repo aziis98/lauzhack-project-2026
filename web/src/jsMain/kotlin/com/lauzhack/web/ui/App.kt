@@ -186,7 +186,7 @@ val App = FC<Props> {
                             }
                         } else {
                             for (doc in shown) {
-                                ReactHTML.button {
+                                ReactHTML.div {
                                     className = ClassName("ws-card")
                                     key = Key(doc.id)
                                     onClick = { _ ->
@@ -204,6 +204,20 @@ val App = FC<Props> {
                                     ReactHTML.span {
                                         className = ClassName("ws-time mono")
                                         +formatTime(doc.updatedAt)
+                                    }
+                                    ReactHTML.button {
+                                        className = ClassName("ws-delete")
+                                        title = "Delete worksheet"
+                                        asDynamic()["aria-label"] = "Delete worksheet"
+                                        onClick = { event ->
+                                            event.stopPropagation()
+                                            scope.launch {
+                                                if (api.deleteDocument(doc.id)) {
+                                                    documents = documents?.filterNot { it.id == doc.id }
+                                                }
+                                            }
+                                        }
+                                        ReactHTML.span { className = ClassName("ph ph-trash") }
                                     }
                                 }
                             }
