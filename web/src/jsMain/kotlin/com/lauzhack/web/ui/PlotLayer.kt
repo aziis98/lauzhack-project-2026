@@ -73,7 +73,13 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
 
     val fnName = plot.functionName ?: "f"
     val is3D = plot.variableY != null
+    val isMolecule = plot.expression.startsWith("molecule:")
     val panelWidth = if (is3D) PLOT3D_CANVAS_WIDTH + 28.0 else PLOT_PANEL_WIDTH
+    val buttonLabel = if (isMolecule) {
+        "Show ${plot.expression.removePrefix("molecule:")}"
+    } else {
+        "$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""})"
+    }
 
     ReactHTML.button {
         className = ClassName("plot-btn")
@@ -94,11 +100,11 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
         ReactHTML.div {
             className = ClassName("plot-btn-top")
             ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
-            +"Plot"
+            +if (isMolecule) "Show" else "Plot"
         }
         ReactHTML.span {
             className = ClassName("plot-btn-label")
-            +"$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""})"
+            +buttonLabel
         }
         ReactHTML.span {
             className = ClassName("plot-btn-close")
@@ -156,7 +162,7 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
                 ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
                 ReactHTML.span {
                     className = ClassName("plot-expr")
-                    +"$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""}) = ${plot.expression}"
+                    +if (isMolecule) plot.expression.removePrefix("molecule:") else "$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""}) = ${plot.expression}"
                 }
                 ReactHTML.button {
                     className = ClassName("hint-close")
@@ -200,7 +206,13 @@ private external interface PlotSvgProps : Props {
 }
 
 private val PlotSvg = FC<PlotSvgProps> { props ->
-    val svg = buildPlotSvg(props.plot, width = PLOT_PANEL_WIDTH - 24.0, height = PLOT_PANEL_HEIGHT)
+    val plot = props.plot
+    // molecule: prefix → render a molecular diagram instead of a curve
+    val svg = if (plot.expression.startsWith("molecule:")) {
+        buildMoleculeSvg(plot.expression.removePrefix("molecule:"), width = PLOT_PANEL_WIDTH - 24.0, height = PLOT_PANEL_HEIGHT)
+    } else {
+        buildPlotSvg(plot, width = PLOT_PANEL_WIDTH - 24.0, height = PLOT_PANEL_HEIGHT)
+    }
     if (svg == null) {
         ReactHTML.p { className = ClassName("plot-error"); +"Cannot plot this expression" }
         return@FC
@@ -346,6 +358,93 @@ internal fun buildPlotSvg(plot: AgentAction.PlotAction, width: Double, height: D
 
 private fun String.xmlEscape(): String =
     replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+
+// ---------------------------------------------------------------
+// Molecular diagrams (demo: hard-coded layouts for common formulas)
+// ---------------------------------------------------------------
+
+internal data class Atom(val symbol: String, val x: Double, val y: Double, val color: String)
+internal data class Bond(val from: Int, val to: Int, val order: Int = 1)
+
+/** Atoms as labeled circles, bonds as lines — the same neobrutalist panel. */
+internal fun buildMoleculeSvg(formula: String, width: Double, height: Double): String? {
+    val (atoms, bonds) = moleculeLayout(formula.uppercase()) ?: return null
+    val cx = width / 2
+    val cy = height / 2
+    val sb = StringBuilder()
+    sb.append("<svg width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\" xmlns=\"http://www.w3.org/2000/svg\">")
+    sb.append("<text x=\"${cx}\" y=\"24\" text-anchor=\"middle\" fill=\"#1a1a1a\" font-size=\"16\" font-weight=\"800\" font-family=\"ui-monospace,monospace\">$formula</text>")
+
+    // bonds first (behind the atoms)
+    for (b in bonds) {
+        val a1 = atoms[b.from]
+        val a2 = atoms[b.to]
+        val x1 = cx + a1.x; val y1 = cy + a1.y
+        val x2 = cx + a2.x; val y2 = cy + a2.y
+        for (i in 0 until b.order) {
+            val off = if (b.order == 1) 0.0 else (i - (b.order - 1) / 2.0) * 5.0
+            // offset perpendicular to the bond direction
+            val dx = x2 - x1; val dy = y2 - y1
+            val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1.0)
+            val px = -dy / len * off; val py = dx / len * off
+            sb.append("<line x1=\"${fmt(x1 + px)}\" y1=\"${fmt(y1 + py)}\" x2=\"${fmt(x2 + px)}\" y2=\"${fmt(y2 + py)}\" stroke=\"#1a1a1a\" stroke-width=\"2.2\"/>")
+        }
+    }
+
+    // atoms
+    for (a in atoms) {
+        val ax = cx + a.x; val ay = cy + a.y
+        sb.append("<circle cx=\"${fmt(ax)}\" cy=\"${fmt(ay)}\" r=\"18\" fill=\"${a.color}\" stroke=\"#1a1a1a\" stroke-width=\"1.5\"/>")
+        sb.append("<text x=\"${fmt(ax)}\" y=\"${fmt(ay + 4)}\" text-anchor=\"middle\" fill=\"#1a1a1a\" font-size=\"12\" font-weight=\"700\" font-family=\"sans-serif\">${a.symbol}</text>")
+    }
+
+    sb.append("</svg>")
+    return sb.toString()
+}
+
+private fun moleculeLayout(formula: String): Pair<List<Atom>, List<Bond>>? = when (formula) {
+    "CH4" -> Pair(
+        listOf(
+            Atom("C", 0.0, 0.0, "#b8e0ff"),
+            Atom("H", -55.0, -35.0, "#fff8ec"), Atom("H", 55.0, -35.0, "#fff8ec"),
+            Atom("H", -55.0, 35.0, "#fff8ec"), Atom("H", 55.0, 35.0, "#fff8ec"),
+        ),
+        listOf(Bond(0, 1), Bond(0, 2), Bond(0, 3), Bond(0, 4)),
+    )
+    "H2O" -> Pair(
+        listOf(
+            Atom("O", 0.0, -20.0, "#ffc8dd"),
+            Atom("H", -48.0, 28.0, "#fff8ec"), Atom("H", 48.0, 28.0, "#fff8ec"),
+        ),
+        listOf(Bond(0, 1), Bond(0, 2)),
+    )
+    "CO2" -> Pair(
+        listOf(
+            Atom("O", -80.0, 0.0, "#ffc8dd"), Atom("C", 0.0, 0.0, "#b8e0ff"), Atom("O", 80.0, 0.0, "#ffc8dd"),
+        ),
+        listOf(Bond(0, 1, 2), Bond(1, 2, 2)),
+    )
+    "NH3" -> Pair(
+        listOf(
+            Atom("N", 0.0, -15.0, "#c4f1d4"),
+            Atom("H", -52.0, 30.0, "#fff8ec"), Atom("H", 0.0, 45.0, "#fff8ec"), Atom("H", 52.0, 30.0, "#fff8ec"),
+        ),
+        listOf(Bond(0, 1), Bond(0, 2), Bond(0, 3)),
+    )
+    "O2" -> Pair(
+        listOf(Atom("O", -40.0, 0.0, "#ffc8dd"), Atom("O", 40.0, 0.0, "#ffc8dd")),
+        listOf(Bond(0, 1, 2)),
+    )
+    "N2" -> Pair(
+        listOf(Atom("N", -40.0, 0.0, "#c4f1d4"), Atom("N", 40.0, 0.0, "#c4f1d4")),
+        listOf(Bond(0, 1, 3)),
+    )
+    "H2" -> Pair(
+        listOf(Atom("H", -35.0, 0.0, "#fff8ec"), Atom("H", 35.0, 0.0, "#fff8ec")),
+        listOf(Bond(0, 1)),
+    )
+    else -> null
+}
 
 /** 1-2-5 nice ticks across `[lo, hi]`. */
 private fun niceTicks(lo: Double, hi: Double, count: Int, screen: (Double) -> Double): List<Tick> {
