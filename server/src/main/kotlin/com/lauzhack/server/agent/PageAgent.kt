@@ -118,6 +118,9 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
          three distances from the solution; the app shows the one the student chose
          with the slider, and the student can switch instantly. "hintLevel" only says
          which one the student currently prefers — you still write all three.
+       - Format ALL THREE fields ("minimal", "medium", and "guided") in Markdown + LaTeX
+         (${'$'}...${'$'} for inline math, ${'$'}${'$'}...${'$'}${'$'} for display math). Never use Unicode math
+         symbols like ², √, ·, −, or × in hints — always use LaTeX (${'$'}x^2${'$'}, ${'$'}\sqrt{...}${'$'}, ${'$'}\cdot${'$'}).
          * "minimal" — FAR from the solution: only NAME what to use. ONE short line,
            ideally an imperative naming the rule, method or theorem ("Use the product
            rule for derivatives."), or a single formula. No explanation, no question,
@@ -381,9 +384,10 @@ class KoogPageAgent(
             - Use "content" (never "raw") for reading the math.
             - LITERAL FIDELITY: transcribe the student's math exactly; substitute
               only references to functions defined in the conversation.
-            - HINT: all three levels (minimal/medium/guided) in ONE action. Minimal
-              is FAR from the solution, guided is NEAR it. NEVER disclose results
-              unless the student explicitly asks for more help ("more").
+            - HINT: "minimal", "medium", and "guided" MUST all be written in Markdown + LaTeX
+              (${'$'}...${'$'} / ${'$'}${'$'}...${'$'}${'$'}), NEVER plain Unicode math. Minimal is FAR from the
+              solution, guided is NEAR it. NEVER disclose results unless the student
+              explicitly asks for more help ("more").
             - PLOT: JS expression, Math.* only, no implicit multiplication.
             - ERROR: only sure mistakes in complete expressions, max one per turn.
             - Use only chunk ids from the conversation. Stable ids; "remove": true to withdraw.
