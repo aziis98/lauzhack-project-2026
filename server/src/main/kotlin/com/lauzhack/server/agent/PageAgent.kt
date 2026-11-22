@@ -240,16 +240,17 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
          wrote the inputs. Only points the student actually computed: never compute
          or invent points yourself, and leave "points" empty when they computed none.
 
-    4. MOLECULE — a chemical formula the student wrote (demo feature).
+    4. MOLECULE / PHYSICS — a chemical formula or a famous physics formula
+       the student wrote (demo feature).
        { "kind": "plot", "id": "plot-<source chunk id>", "functionName": null,
-         "variable": "x", "expression": "molecule:<FORMULA>",
+         "variable": "x", "expression": "molecule:<FORMULA>" | "physics:<FORMULA>",
          "domain": [], "points": [] }
 
        - Emit when the student writes a CHEMICAL FORMULA like CH4, H2O, CO2,
-         NH3 — not a mathematical function. The expression starts with
-         "molecule:" followed by the formula (e.g. "molecule:CH4").
-       - The client renders a 2D molecular structure diagram (atoms as
-         labeled circles, bonds as lines) in the same floating panel.
+         NH3 — expression starts with "molecule:" (e.g. "molecule:CH4").
+       - Emit when the student writes a famous PHYSICS FORMULA like F = ma,
+         E = mc^2, v = d/t — expression starts with "physics:" (e.g. "physics:F=ma").
+       - The client renders a 2D diagram in the same floating panel.
        - Only for formulas the student actually wrote on the page.
 
     3. ERROR — a clear mathematical mistake in the student's work.

@@ -74,11 +74,12 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
     val fnName = plot.functionName ?: "f"
     val is3D = plot.variableY != null
     val isMolecule = plot.expression.startsWith("molecule:")
+    val isPhysics = plot.expression.startsWith("physics:")
     val panelWidth = if (is3D) PLOT3D_CANVAS_WIDTH + 28.0 else PLOT_PANEL_WIDTH
-    val buttonLabel = if (isMolecule) {
-        "Show ${plot.expression.removePrefix("molecule:")}"
-    } else {
-        "$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""})"
+    val buttonLabel = when {
+        isMolecule -> "Show ${plot.expression.removePrefix("molecule:")}"
+        isPhysics -> "Show ${plot.expression.removePrefix("physics:")}"
+        else -> "$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""})"
     }
 
     ReactHTML.button {
@@ -100,7 +101,7 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
         ReactHTML.div {
             className = ClassName("plot-btn-top")
             ReactHTML.span { className = ClassName("ph ph-chart-line-up") }
-            +if (isMolecule) "Show" else "Plot"
+            +if (isMolecule || isPhysics) "Show" else "Plot"
         }
         ReactHTML.span {
             className = ClassName("plot-btn-label")
@@ -162,7 +163,11 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
                 ReactHTML.span { className = ClassName("ph ph-chart-line-up") }
                 ReactHTML.span {
                     className = ClassName("plot-expr")
-                    +if (isMolecule) plot.expression.removePrefix("molecule:") else "$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""}) = ${plot.expression}"
+                    +when {
+                        isMolecule -> plot.expression.removePrefix("molecule:")
+                        isPhysics -> plot.expression.removePrefix("physics:")
+                        else -> "$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""}) = ${plot.expression}"
+                    }
                 }
                 ReactHTML.button {
                     className = ClassName("hint-close")
@@ -207,9 +212,11 @@ private external interface PlotSvgProps : Props {
 
 private val PlotSvg = FC<PlotSvgProps> { props ->
     val plot = props.plot
-    // molecule: prefix → render a molecular diagram instead of a curve
+    // molecule: or physics: prefix → render a hardcoded diagram instead of a curve
     val svg = if (plot.expression.startsWith("molecule:")) {
         buildMoleculeSvg(plot.expression.removePrefix("molecule:"), width = PLOT_PANEL_WIDTH - 24.0, height = PLOT_PANEL_HEIGHT)
+    } else if (plot.expression.startsWith("physics:")) {
+        buildPhysicsSvg(plot.expression.removePrefix("physics:"), width = PLOT_PANEL_WIDTH - 24.0, height = PLOT_PANEL_HEIGHT)
     } else {
         buildPlotSvg(plot, width = PLOT_PANEL_WIDTH - 24.0, height = PLOT_PANEL_HEIGHT)
     }
@@ -444,6 +451,69 @@ private fun moleculeLayout(formula: String): Pair<List<Atom>, List<Bond>>? = whe
         listOf(Bond(0, 1)),
     )
     else -> null
+}
+
+// ---------------------------------------------------------------
+// Physics diagrams (demo: hardcoded layout for F = ma)
+// ---------------------------------------------------------------
+
+/** Newton's second law: a block accelerating under force, animated with SMIL. */
+internal fun buildPhysicsSvg(formula: String, width: Double, height: Double): String? {
+    if (formula != "F=ma") return null
+    val cx = width / 2
+    val sb = StringBuilder()
+    sb.append("<svg width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\" xmlns=\"http://www.w3.org/2000/svg\">")
+
+    // ground with hatch marks
+    val groundY = height - 50.0
+    sb.append("<line x1=\"14\" y1=\"$groundY\" x2=\"${width - 14}\" y2=\"$groundY\" stroke=\"#1a1a1a\" stroke-width=\"2\"/>")
+    for (x in 24 until width.toInt() - 14 step 24) {
+        sb.append("<line x1=\"$x\" y1=\"$groundY\" x2=\"${x + 10}\" y2=\"${groundY + 10}\" stroke=\"#55504a\" stroke-width=\"1\"/>")
+    }
+
+    // the animated group: force arrow + block + acceleration arrow move together
+    // (the force stays applied, the block accelerates from rest — physically correct)
+    val blockW = 80.0
+    val blockH = 54.0
+    val startX = cx - blockW / 2 - 30  // start left of center, accelerate right
+    val blockY = groundY - blockH - 22
+    val arrowY = blockY + blockH / 2
+
+    sb.append("<g>")
+    // SMIL animation: pause → accelerate (ease-in) → pause → reset
+    // keySplines: linear pause, then 0.4 0 1 1 = starts slow, ends fast
+    sb.append("<animateTransform attributeName=\"transform\" type=\"translate\" ")
+    sb.append("values=\"0,0; 0,0; 60,0; 60,0\" ")
+    sb.append("keyTimes=\"0; 0.15; 0.75; 1\" ")
+    sb.append("calcMode=\"spline\" ")
+    sb.append("keySplines=\"0 0 1 1; 0.4 0 1 1; 0 0 1 1\" ")
+    sb.append("dur=\"3s\" repeatCount=\"indefinite\"/>")
+
+    // force arrow (thick ink, from the left of the block)
+    val fx1 = startX - 72
+    val fx2 = startX - 4
+    sb.append("<line x1=\"$fx1\" y1=\"$arrowY\" x2=\"$fx2\" y2=\"$arrowY\" stroke=\"#1a1a1a\" stroke-width=\"3.5\"/>")
+    sb.append("<polygon points=\"$fx2,$arrowY ${fx2 - 12},${arrowY - 7} ${fx2 - 12},${arrowY + 7}\" fill=\"#1a1a1a\"/>")
+    sb.append("<text x=\"${(fx1 + fx2) / 2}\" y=\"${arrowY - 12}\" text-anchor=\"middle\" fill=\"#1a1a1a\" font-size=\"16\" font-weight=\"800\" font-family=\"serif\">F</text>")
+
+    // the block (mass m)
+    sb.append("<rect x=\"$startX\" y=\"$blockY\" width=\"$blockW\" height=\"$blockH\" rx=\"8\" fill=\"#c4f1d4\" stroke=\"#1a1a1a\" stroke-width=\"2\"/>")
+    sb.append("<text x=\"${startX + blockW / 2}\" y=\"${blockY + blockH / 2 + 5}\" text-anchor=\"middle\" fill=\"#1a1a1a\" font-size=\"18\" font-weight=\"800\" font-family=\"serif\">m</text>")
+
+    // acceleration arrow (red, from the right of the block)
+    val ax1 = startX + blockW + 4
+    val ax2 = startX + blockW + 54
+    sb.append("<line x1=\"$ax1\" y1=\"$arrowY\" x2=\"$ax2\" y2=\"$arrowY\" stroke=\"#c62828\" stroke-width=\"2.5\"/>")
+    sb.append("<polygon points=\"$ax2,$arrowY ${ax2 - 10},${arrowY - 6} ${ax2 - 10},${arrowY + 6}\" fill=\"#c62828\"/>")
+    sb.append("<text x=\"${(ax1 + ax2) / 2}\" y=\"${arrowY - 12}\" text-anchor=\"middle\" fill=\"#c62828\" font-size=\"14\" font-weight=\"800\" font-family=\"serif\">a</text>")
+
+    sb.append("</g>")
+
+    // caption
+    sb.append("<text x=\"${cx}\" y=\"${height - 16}\" text-anchor=\"middle\" fill=\"#55504a\" font-size=\"11\" font-family=\"sans-serif\">Newton's second law</text>")
+
+    sb.append("</svg>")
+    return sb.toString()
 }
 
 /** 1-2-5 nice ticks across `[lo, hi]`. */
