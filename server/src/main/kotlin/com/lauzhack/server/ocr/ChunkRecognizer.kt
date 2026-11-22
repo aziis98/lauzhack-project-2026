@@ -48,12 +48,19 @@ internal val OCR_SYSTEM_PROMPT = """
 
     The message also lists the symbol fragments detected in the image, as
     (minx,miny,maxx,maxy) in image pixel space, left to right. Each fragment is one
-    connected handwriting blob (strokes of the same symbol are already merged). In the
-    image each fragment's region is shaded light gray behind the ink, so you can match a
-    symbol to its coordinates.
+    connected handwriting blob (strokes of the same symbol are already merged).
 
-    Fill `content` with markdown + LaTeX using this AUGMENTED syntax: wrap every symbol
-    you transcribe in a bbox marker, e.g.:
+    First, fill `plainContent` with the clean markdown + LaTeX transcription WITHOUT any
+    `\bbox` markers:
+    - MATH: ${'$'}${'$'} no; use LaTeX without ${'$'} delimiters, e.g. `\int_0^1 x^2 \, dx = \frac{1}{3}`.
+      Use \\ to separate lines when there are several.
+    - TEXT: plain text with inline math as ${'$'}...${'$'}, e.g.
+      `By Rolle's theorem there exists ${'$'}c${'$'} such that ${'$'}f'(c)=0${'$'}`.
+    - DRAWING: a short description of what is drawn.
+    - HINT_REQUEST, QUESTION_MARK, UNREADABLE: empty string.
+
+    Then, fill `content` with the exact same transcription as `plainContent`, using this
+    AUGMENTED syntax: wrap every symbol you transcribe in a bbox marker, e.g.:
     - MATH: ${'$'}${'$'} no; use LaTeX without ${'$'} delimiters, one bbox per symbol:
       \bbox[12,34,80,61]{\int_0^1} \bbox[96,40,130,63]{x^2} \, dx = \bbox[148,44,190,66]{\frac{1}{3}}
       Use \\ to separate lines when there are several.
@@ -93,9 +100,13 @@ class KoogChunkRecognizer(
 
     private val log = org.slf4j.LoggerFactory.getLogger(KoogChunkRecognizer::class.java)
 
-    /** Wire format the model fills in; kept separate from the shared domain type. */
+    /** Wire format the model fills in; `plainContent` comes before `content` so the model transcribes cleanly first. */
     @Serializable
-    private data class OcrOutput(val kind: ChunkKind, val content: String)
+    private data class OcrOutput(
+        val kind: ChunkKind,
+        val plainContent: String,
+        val content: String,
+    )
 
     override suspend fun recognize(png: ByteArray, fragments: List<SymbolFragment>): ChunkTranscription {
         val request = prompt("chunk-ocr") {
@@ -122,7 +133,7 @@ class KoogChunkRecognizer(
             model.id,
             fragments.size,
         )
-        return ChunkTranscription(output.kind, output.content.trim())
+        return ChunkTranscription(output.kind, output.content.trim(), output.plainContent.trim())
     }
 
     private companion object {
@@ -130,13 +141,15 @@ class KoogChunkRecognizer(
         val EXAMPLES = listOf(
             OcrOutput(
                 ChunkKind.MATH,
+                "\\int_0^1 x^2 \\, dx = \\frac{1}{3}",
                 "\\bbox[12,34,80,61]{\\int_0^1} \\bbox[96,40,130,63]{x^2} \\, dx = \\bbox[148,44,190,66]{\\frac{1}{3}}",
             ),
             OcrOutput(
                 ChunkKind.TEXT,
+                "By Rolle's theorem there exists ${'$'}c${'$'} such that ${'$'}f'(c)=0${'$'}",
                 "By Rolle's theorem there exists ${'$'}\\bbox[31,40,58,63]{c}${'$'} such that ${'$'}\\bbox[70,41,110,64]{f'(c)=0}${'$'}",
             ),
-            OcrOutput(ChunkKind.HINT_REQUEST, ""),
+            OcrOutput(ChunkKind.HINT_REQUEST, "", ""),
         )
 
     }

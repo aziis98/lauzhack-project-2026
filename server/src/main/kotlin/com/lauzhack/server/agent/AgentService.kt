@@ -176,20 +176,9 @@ class AgentService(
 
                 is TranscriptionEvent.Updated -> {
                     // OCR still pending: not part of a delta until it is transcribed
-                    val transcription = event.chunk.transcription ?: return@withLock
+                    if (event.chunk.transcription == null) return@withLock
                     val chunk = event.chunk.chunk
-                    val rawContent = transcription.content
-                    val cleanContent = if (rawContent.isNotEmpty()) rawContent.stripBboxes().trim() else rawContent
-                    val pc = PageChunk(
-                        id = chunk.id,
-                        minX = chunk.bounds.minX,
-                        minY = chunk.bounds.minY,
-                        maxX = chunk.bounds.maxX,
-                        maxY = chunk.bounds.maxY,
-                        kind = transcription.kind.name,
-                        content = cleanContent,
-                        raw = if (rawContent != cleanContent) rawContent else null,
-                    )
+                    val pc = event.chunk.toPageChunk()
                     s.pendingRemoved.remove(chunk.id)
                     if (!s.bootstrapped || s.knownChunks.add(chunk.id)) {
                         s.pendingAdded[chunk.id] = pc
@@ -423,7 +412,8 @@ class AgentService(
 
     private fun com.lauzhack.shared.ocr.TranscribedChunk.toPageChunk(): PageChunk {
         val rawContent = transcription?.content.orEmpty()
-        val clean = if (rawContent.isNotEmpty()) rawContent.stripBboxes().trim() else rawContent
+        val clean = transcription?.plainContent?.trim()
+            ?: if (rawContent.isNotEmpty()) rawContent.stripBboxes().trim() else rawContent
         return PageChunk(
             id = chunk.id,
             minX = chunk.bounds.minX,

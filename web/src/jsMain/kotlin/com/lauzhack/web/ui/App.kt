@@ -106,7 +106,7 @@ val App = FC<Props> {
                 className = ClassName("dash-main")
 
                 TopBar {
-                    title = "Lauzhack Draw"
+                    title = "Hintsight"
                     subtitle = "Kotlin · SQLite · tldraw"
                 }
 

@@ -25,6 +25,11 @@ val TopBar = FC<TopBarProps> { props ->
                     onClick = { _ -> props.onBack?.invoke() }
                 }
             }
+            ReactHTML.img {
+                className = ClassName("topbar-logo")
+                src = "/logo.svg"
+                alt = ""
+            }
             ReactHTML.div {
                 className = ClassName("title")
                 +props.title

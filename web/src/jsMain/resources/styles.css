@@ -1,4 +1,4 @@
-/* Lauzhack Draw — app styles */
+/* Hintsight — app styles */
 
 :root {
 	--card: #ffffff;
@@ -109,6 +109,13 @@ input:focus {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	max-width: 24vw;
+}
+
+.topbar-logo {
+	width: 28px;
+	height: 28px;
+	flex-shrink: 0;
+	display: block;
 }
 
 /* ------- dashboard layout ------- */

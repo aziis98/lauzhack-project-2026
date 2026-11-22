@@ -131,10 +131,7 @@ class OcrService(
                 // pre-segmentation: symbol fragment coordinates ground the model's bboxes
                 val fragments = withContext(Dispatchers.Default) { annotator.annotate(png) }
                 val afterSegment = System.nanoTime()
-                // wash a light gray patch behind each fragment so the model can tie
-                // every symbol to its coordinates (the fragment list is unchanged)
-                val modelPng = withContext(Dispatchers.Default) { annotator.renderBboxBackground(png, fragments) }
-                val recognized = recognizer.recognize(modelPng, fragments)
+                val recognized = recognizer.recognize(png, fragments)
                 val afterModel = System.nanoTime()
                 log.info(
                     "ocr-timing doc {} {}: debounce={}ms segment={}ms model={}ms total={}ms",

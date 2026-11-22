@@ -31,11 +31,14 @@ enum class ChunkKind {
  * @property content LaTeX for [ChunkKind.MATH]; plain text with inline `$...$`
  *   math for [ChunkKind.TEXT]; a short description for [ChunkKind.DRAWING];
  *   empty otherwise. Transcribed literally, mistakes included.
+ * @property plainContent Clean transcription without `\bbox` markers, produced
+ *   by the OCR model before annotating symbol bounding boxes.
  */
 @Serializable
 data class ChunkTranscription(
     val kind: ChunkKind,
     val content: String,
+    val plainContent: String? = null,
 )
 
 /**
