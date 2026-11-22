@@ -93,7 +93,7 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
         }
         ReactHTML.div {
             className = ClassName("plot-btn-top")
-            ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
+            ReactHTML.span { className = ClassName("ph ph-chart-line-up") }
             +"Plot"
         }
         ReactHTML.span {
@@ -153,7 +153,7 @@ private val PlotEntry = FC<PlotEntryProps> { props ->
 
             ReactHTML.div {
                 className = ClassName("plot-head")
-                ReactHTML.span { className = ClassName("ph"); +"ph-chart-line-up" }
+                ReactHTML.span { className = ClassName("ph ph-chart-line-up") }
                 ReactHTML.span {
                     className = ClassName("plot-expr")
                     +"$fnName(${plot.variable}${plot.variableY?.let { ", $it" } ?: ""}) = ${plot.expression}"

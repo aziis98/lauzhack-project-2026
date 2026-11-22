@@ -37,7 +37,7 @@ val Sidebar = FC<SidebarProps> { props ->
         ReactHTML.button {
             className = ClassName(if (props.active == "all") "subject active" else "subject")
             onClick = { _ -> props.onSelect?.invoke("all") }
-            ReactHTML.span { className = ClassName("ph"); +"ph-stack" }
+            ReactHTML.span { className = ClassName("ph ph-stack") }
             +"All"
         }
 
@@ -50,8 +50,7 @@ val Sidebar = FC<SidebarProps> { props ->
                 onClick = { _ -> props.onSelect?.invoke(subject.name) }
 
                 ReactHTML.span {
-                    className = ClassName(if (isOpen) "ph caret open" else "ph caret")
-                    +"ph-caret-right"
+                    className = ClassName(if (isOpen) "ph ph-caret-right caret open" else "ph ph-caret-right caret")
                     onClick = { event ->
                         event.stopPropagation()
                         expanded = if (isOpen) expanded - subject.name else expanded + subject.name

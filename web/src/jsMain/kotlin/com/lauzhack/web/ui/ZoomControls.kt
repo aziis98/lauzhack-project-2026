@@ -19,21 +19,21 @@ val ZoomControls = FC<ZoomControlsProps> { props ->
             className = ClassName("zoom-btn")
             title = "Zoom out"
             onClick = { _ -> props.editor?.zoomOut() }
-            ReactHTML.span { className = ClassName("ph"); +"ph-magnifying-glass-minus" }
+            ReactHTML.span { className = ClassName("ph ph-magnifying-glass-minus") }
         }
 
         ReactHTML.button {
             className = ClassName("zoom-btn")
             title = "Zoom in"
             onClick = { _ -> props.editor?.zoomIn() }
-            ReactHTML.span { className = ClassName("ph"); +"ph-magnifying-glass-plus" }
+            ReactHTML.span { className = ClassName("ph ph-magnifying-glass-plus") }
         }
 
         ReactHTML.button {
             className = ClassName("zoom-btn")
             title = "Reset zoom"
             onClick = { _ -> props.editor?.resetZoom() }
-            ReactHTML.span { className = ClassName("ph"); +"ph-arrows-counter-clockwise" }
+            ReactHTML.span { className = ClassName("ph ph-arrows-counter-clockwise") }
         }
     }
 }

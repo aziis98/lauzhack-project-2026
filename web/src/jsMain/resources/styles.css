@@ -424,6 +424,7 @@ input:focus {
 	transform: translateX(-50%);
 	z-index: 1000;
 	display: flex;
+	align-items: center;
 	gap: 2px;
 	padding: 3px;
 	background: rgba(255, 255, 255, 0.9);
@@ -431,6 +432,13 @@ input:focus {
 	border-radius: 12px;
 	box-shadow: var(--shadow);
 	max-width: calc(100vw - 28px);
+	overflow-x: auto;
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+}
+
+.tool-dock::-webkit-scrollbar {
+	display: none;
 }
 
 .tool {
@@ -500,6 +508,7 @@ input:focus {
    Tablet toolbar (44px touch targets), color swatches
    ===================================================================== */
 .tool {
+	flex-shrink: 0;
 	min-width: 44px;
 	min-height: 44px;
 	padding: 10px;
@@ -512,6 +521,8 @@ input:focus {
 }
 
 .tool-sep {
+	flex-shrink: 0;
+	align-self: stretch;
 	width: 1px;
 	margin: 8px 4px;
 	background: var(--border);
@@ -1608,6 +1619,7 @@ input:focus { background: var(--yellow); }
 }
 /* ------- hint detail slider (Toolbar.kt) ------- */
 .hint-level {
+	flex-shrink: 0;
 	display: flex;
 	align-items: center;
 	gap: 6px;

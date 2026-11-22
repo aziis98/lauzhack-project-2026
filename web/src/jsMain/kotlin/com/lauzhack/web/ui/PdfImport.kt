@@ -136,7 +136,7 @@ val PdfImport = FC<PdfImportProps> { props ->
         // ---- header ----
         ReactHTML.div {
             className = ClassName("pdf-import-head")
-            ReactHTML.span { className = ClassName("ph"); +"ph-file-pdf" }
+            ReactHTML.span { className = ClassName("ph ph-file-pdf") }
             ReactHTML.span { className = ClassName("pdf-import-title"); +(props.file.name as String) }
 
             ReactHTML.div {
@@ -149,7 +149,7 @@ val PdfImport = FC<PdfImportProps> { props ->
                         key = Key(m.name)
                         className = ClassName(if (mode == m) "pdf-mode-btn active" else "pdf-mode-btn")
                         onClick = { mode = m }
-                        ReactHTML.span { className = ClassName("ph"); +icon }
+                        ReactHTML.span { className = ClassName("ph $icon") }
                         +label
                     }
                 }
@@ -264,7 +264,7 @@ val PdfImport = FC<PdfImportProps> { props ->
                             }
                         }
                     }
-                    ReactHTML.span { className = ClassName("ph"); +"ph-check" }
+                    ReactHTML.span { className = ClassName("ph ph-check") }
                     +(if (creating) "Creating…" else "Create worksheet")
                 }
             }

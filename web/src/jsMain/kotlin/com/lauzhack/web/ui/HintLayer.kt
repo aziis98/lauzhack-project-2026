@@ -117,7 +117,7 @@ private val HintCardView = FC<HintCardProps> { props ->
 
         ReactHTML.div {
             className = ClassName("hint-head")
-            ReactHTML.span { className = ClassName("ph"); +"ph-lightbulb" }
+            ReactHTML.span { className = ClassName("ph ph-lightbulb") }
             ReactHTML.span {
                 className = ClassName("hint-title")
                 +when (hint.status) {
@@ -168,7 +168,7 @@ private val HintCardView = FC<HintCardProps> { props ->
                     it.preventDefault()
                     props.onMore()
                 }
-                ReactHTML.span { className = ClassName("ph"); +"ph-question" }
+                ReactHTML.span { className = ClassName("ph ph-question") }
                 +(if (hint.status == HintStatus.FAILED) "Try again" else "I don't get it — another hint")
             }
         }

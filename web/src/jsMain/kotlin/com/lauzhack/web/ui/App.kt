@@ -120,7 +120,7 @@ val App = FC<Props> {
                     // PDF import: label wraps a hidden file input; opens the PdfImport screen
                     ReactHTML.label {
                         className = ClassName("btn-primary")
-                        ReactHTML.span { className = ClassName("ph"); +"ph-upload-simple" }
+                        ReactHTML.span { className = ClassName("ph ph-upload-simple") }
                         +"Upload PDF"
                         ReactHTML.input {
                             className = ClassName("hidden-file-input")
@@ -145,7 +145,7 @@ val App = FC<Props> {
                     ReactHTML.div {
                         className = ClassName("ws-new")
                         key = Key("new-tile")
-                        ReactHTML.span { className = ClassName("ph"); +"ph-plus" }
+                        ReactHTML.span { className = ClassName("ph ph-plus") }
                         ReactHTML.input {
                             className = ClassName("ws-new-input")
                             placeholder = "New worksheet…"
@@ -173,7 +173,7 @@ val App = FC<Props> {
                             ReactHTML.div {
                                 className = ClassName("ws-empty")
                                 key = Key("empty")
-                                ReactHTML.span { className = ClassName("ph"); +"ph-notebook" }
+                                ReactHTML.span { className = ClassName("ph ph-notebook") }
                                 +"No worksheets yet — create your first one with the tile above."
                             }
                         } else if (activeSubject != "all") {
@@ -181,7 +181,7 @@ val App = FC<Props> {
                             ReactHTML.div {
                                 className = ClassName("ws-empty")
                                 key = Key("subject-empty")
-                                ReactHTML.span { className = ClassName("ph"); +"ph-folder-simple" }
+                                ReactHTML.span { className = ClassName("ph ph-folder-simple") }
                                 +"No worksheets in $activeSubject yet — subjects get real wiring soon."
                             }
                         } else {
@@ -195,7 +195,7 @@ val App = FC<Props> {
                                     }
                                     ReactHTML.div {
                                         className = ClassName("ws-thumb")
-                                        ReactHTML.span { className = ClassName("ph"); +"ph-notebook" }
+                                        ReactHTML.span { className = ClassName("ph ph-notebook") }
                                     }
                                     ReactHTML.span {
                                         className = ClassName("ws-title")
@@ -226,7 +226,7 @@ val App = FC<Props> {
                     activeEditor = null
                     navigateHome()
                 }
-                ReactHTML.span { className = ClassName("ph"); +"ph-arrow-left" }
+                ReactHTML.span { className = ClassName("ph ph-arrow-left") }
             }
 
             // minimal floating tool pill

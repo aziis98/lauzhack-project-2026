@@ -96,7 +96,7 @@ private val ErrorMarkView = FC<ErrorMarkProps> { props ->
             it.preventDefault()
             open = !open
         }
-        ReactHTML.span { className = ClassName("ph"); +"ph-warning-circle" }
+        ReactHTML.span { className = ClassName("ph ph-warning-circle") }
         +"Error"
         ReactHTML.span {
             className = ClassName("error-btn-close")
@@ -150,7 +150,7 @@ private val ErrorMarkView = FC<ErrorMarkProps> { props ->
 
             ReactHTML.div {
                 className = ClassName("error-head")
-                ReactHTML.span { className = ClassName("ph"); +"ph-warning-circle" }
+                ReactHTML.span { className = ClassName("ph ph-warning-circle") }
                 ReactHTML.span {
                     className = ClassName("error-title")
                     val title = "Check this" + (mark.symbol?.let { ": $it" } ?: "")

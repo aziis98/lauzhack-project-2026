@@ -65,7 +65,7 @@ val Toolbar = FC<ToolbarProps> { props ->
             title = label
             asDynamic()["aria-label"] = label
             onClick = { _ -> editor?.let(onPress) }
-            ReactHTML.span { className = ClassName("ph"); +icon }
+            ReactHTML.span { className = ClassName("ph $icon") }
         }
     }
 
@@ -125,7 +125,7 @@ val Toolbar = FC<ToolbarProps> { props ->
             onClick = { _ ->
                 canvasDocumentId?.let { doc -> MainScope().launch { runCatching { toolbarApi.requestHint(doc) } } }
             }
-            ReactHTML.span { className = ClassName("ph"); +"ph-question" }
+            ReactHTML.span { className = ClassName("ph ph-question") }
         }
 
         // How detailed the hints are: minimal · medium · guided (saved per document)
