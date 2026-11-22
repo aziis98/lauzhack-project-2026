@@ -7,6 +7,7 @@ import react.Props
 import react.dom.html.ReactHTML
 import react.useEffect
 import react.useEffectOnce
+import react.useLayoutEffect
 import react.useRef
 import com.lauzhack.shared.chunking.BoundingBox
 import com.lauzhack.shared.dto.DefineTermRequest
@@ -201,19 +202,103 @@ external interface GridProps : Props {
 
 /**
  * Squared paper: a white sheet the width of the page with a 24-unit grid,
- * drawn behind the shapes. Mounted as tldraw's `Grid` component (shown in grid mode).
+ * drawn behind the shapes on a viewport-sized canvas (avoids iPad Safari
+ * sub-pixel CSS gradient flicker during pan/zoom).
  */
 val PaperGrid = FC<GridProps> { props ->
-    val z = props.z
-    val square = SQUARE * z
-    ReactHTML.div {
-        className = ClassName("paper")
-        val css: dynamic = js("({})")
-        css.left = "${props.x * z}px"
-        css.top = "${props.y * z}px"
-        css.width = "${PAGE_WIDTH * z}px"
-        css.height = "${canvasPageHeight * z}px"
-        css.backgroundSize = "${square}px ${square}px"
-        asDynamic().style = css
+    val canvasRef = useRef<web.html.HTMLCanvasElement>(null)
+    val latest = useRef(props)
+    latest.current = props
+
+    fun draw(p: GridProps) {
+        val canvas: dynamic = canvasRef.current ?: return
+        val vw = (canvas.clientWidth as Number).toDouble()
+        val vh = (canvas.clientHeight as Number).toDouble()
+        if (vw <= 0.0 || vh <= 0.0) return
+
+        val dpr = (js("window.devicePixelRatio || 1") as Number).toDouble()
+        val pw = kotlin.math.round(vw * dpr).toInt()
+        val ph = kotlin.math.round(vh * dpr).toInt()
+        if ((canvas.width as Int) != pw) canvas.width = pw
+        if ((canvas.height as Int) != ph) canvas.height = ph
+
+        val ctx: dynamic = canvas.getContext("2d") ?: return
+        ctx.setTransform(dpr, 0.0, 0.0, dpr, 0.0, 0.0)
+        ctx.clearRect(0.0, 0.0, vw, vh)
+
+        val z = p.z
+        val left = p.x * z
+        val top = p.y * z
+        val width = PAGE_WIDTH * z
+        val height = canvasPageHeight * z
+        if (left + width < 0.0 || left > vw || top + height < 0.0 || top > vh) return
+
+        ctx.save()
+        ctx.shadowColor = "rgba(0, 0, 0, 0.08)"
+        ctx.shadowBlur = 24.0
+        ctx.shadowOffsetY = 8.0
+        ctx.fillStyle = "#ffffff"
+        ctx.fillRect(left, top, width, height)
+        ctx.restore()
+
+        val step = SQUARE * z
+        if (step < 4.0) return
+
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(left, top, width, height)
+        ctx.clip()
+
+        ctx.strokeStyle = "rgba(37, 99, 235, 0.12)"
+        ctx.lineWidth = 1.0 / dpr
+        val halfPx = 0.5 / dpr
+        val visLeft = kotlin.math.max(0.0, left)
+        val visRight = kotlin.math.min(vw, left + width)
+        val visTop = kotlin.math.max(0.0, top)
+        val visBottom = kotlin.math.min(vh, top + height)
+
+        val startCol = kotlin.math.ceil((visLeft - left) / step).toInt().coerceAtLeast(1)
+        val endCol = kotlin.math.floor((visRight - left) / step).toInt()
+        val startRow = kotlin.math.ceil((visTop - top) / step).toInt().coerceAtLeast(1)
+        val endRow = kotlin.math.floor((visBottom - top) / step).toInt()
+
+        ctx.beginPath()
+        for (col in startCol..endCol) {
+            val gx = kotlin.math.round((left + col * step) * dpr) / dpr + halfPx
+            ctx.moveTo(gx, visTop)
+            ctx.lineTo(gx, visBottom)
+        }
+        for (row in startRow..endRow) {
+            val gy = kotlin.math.round((top + row * step) * dpr) / dpr + halfPx
+            ctx.moveTo(visLeft, gy)
+            ctx.lineTo(visRight, gy)
+        }
+        ctx.stroke()
+        ctx.restore()
+    }
+
+    useLayoutEffect(props.x, props.y, props.z, canvasPageHeight) {
+        draw(props)
+    }
+
+    useEffectOnce {
+        val el: dynamic = canvasRef.current ?: return@useEffectOnce
+        // re-draw with latest camera props when viewport resizes
+        val win: dynamic = js("window")
+        val onResize: () -> Unit = { latest.current?.let { draw(it) } }
+        val ro = js("new ResizeObserver(onResize)")
+        ro.observe(el)
+        win.addEventListener("resize", onResize)
+        try {
+            kotlinx.coroutines.awaitCancellation()
+        } finally {
+            ro.disconnect()
+            win.removeEventListener("resize", onResize)
+        }
+    }
+
+    ReactHTML.canvas {
+        ref = canvasRef
+        className = ClassName("paper-canvas")
     }
 }

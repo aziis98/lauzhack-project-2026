@@ -125,7 +125,11 @@ val Toolbar = FC<ToolbarProps> { props ->
             onClick = { _ ->
                 canvasDocumentId?.let { doc -> MainScope().launch { runCatching { toolbarApi.requestHint(doc) } } }
             }
-            ReactHTML.span { className = ClassName("ph ph-question") }
+            ReactHTML.img {
+                className = ClassName("tool-help-logo")
+                src = "/logo.svg"
+                alt = ""
+            }
         }
 
         // How detailed the hints are: minimal · medium · guided (saved per document)

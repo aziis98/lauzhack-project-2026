@@ -111,7 +111,9 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
          "relatedChunkIds": ["chunk-3"] }
 
        - Unblock the NEXT step of the work nearest the "?" (usually just above or left
-         of it). NEVER state or verify the final result of the exercise, at any level.
+         of it). NEVER disclose, state, or verify the result of the step or exercise
+         (at any level: minimal, medium, or guided), unless the student explicitly asks
+         for more help via a "more" request.
        - ALWAYS generate ALL THREE levels in one action. They are the SAME hint at
          three distances from the solution; the app shows the one the student chose
          with the slider, and the student can switch instantly. "hintLevel" only says
@@ -150,8 +152,9 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
          (oldest first), given for the circled "?" "triggerChunkId" if set. Give a NEW
          hint for the same step, MORE CONCRETE than the last one and worded
          differently — e.g. name the exact rule, point at the exact term, or ask a
-         smaller question — but still never the solution or the result. As always,
-         generate all THREE levels (minimal/medium/guided) of this new hint.
+         smaller question. Because the student explicitly asked for more help, you may
+         reveal the intermediate or step result here if needed to unblock them. As
+         always, generate all THREE levels (minimal/medium/guided) of this new hint.
        - kind "define": the student CLICKED a word (or a formula, given as LaTeX) in
          the EXERCISE STATEMENT and wants to know what it means. "term" is exactly what
          they clicked; "context" is the sentence around it.
@@ -302,8 +305,9 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
     ## Before you answer — recall
 
     Silence is the default ([] when nothing to do). Hints are Socratic and NEVER
-    reveal the final result; every hint carries all THREE levels (minimal far from
-    the solution, guided near it). Plots use the safe JavaScript DSL with literal
+    disclose results on initial hints — only if the student explicitly asks for more
+    help ("more"); every hint carries all THREE levels (minimal far from the solution,
+    guided near it). Plots use the safe JavaScript DSL with literal
     fidelity and reference substitution. Errors point at the exact wrong symbol
     with its bbox. ids are stable. Answer in English with Unicode math.
 """.trimIndent()
@@ -374,7 +378,8 @@ class KoogPageAgent(
             - LITERAL FIDELITY: transcribe the student's math exactly; substitute
               only references to functions defined in the conversation.
             - HINT: all three levels (minimal/medium/guided) in ONE action. Minimal
-              is FAR from the solution, guided is NEAR it. NEVER the final result.
+              is FAR from the solution, guided is NEAR it. NEVER disclose results
+              unless the student explicitly asks for more help ("more").
             - PLOT: JS expression, Math.* only, no implicit multiplication.
             - ERROR: only sure mistakes in complete expressions, max one per turn.
             - Use only chunk ids from the conversation. Stable ids; "remove": true to withdraw.

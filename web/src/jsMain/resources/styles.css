@@ -550,14 +550,13 @@ input:focus {
 /* =====================================================================
    Squared paper (tldraw Grid slot, screen space)
    ===================================================================== */
-.paper {
+.paper-canvas {
 	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
 	z-index: 150; /* tldraw: background 100 < paper < shapes 300 */
-	background-color: #fff;
-	background-image:
-		linear-gradient(to right, rgba(37, 99, 235, 0.12) 1px, transparent 1px),
-		linear-gradient(to bottom, rgba(37, 99, 235, 0.12) 1px, transparent 1px);
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 40px rgba(0, 0, 0, 0.06);
+	pointer-events: none;
 }
 
 /* =====================================================================
@@ -646,6 +645,7 @@ input:focus {
 .hint-more:active { transform: translate(2px, 2px); box-shadow: none; }
 
 .tool.help { background: var(--lilac); border: var(--line); font-weight: 800; }
+.tool-help-logo { width: 24px; height: 24px; display: block; }
 
 /* The moving-camera hit-test blocker never goes idle with our scrolling-document
    camera (cameraConstraints + wheelBehavior: pan), so it would sit above the
