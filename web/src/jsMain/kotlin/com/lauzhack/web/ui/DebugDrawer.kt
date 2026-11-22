@@ -697,7 +697,9 @@ private val DebugHintsSection = FC<DebugHintsSectionProps> { props ->
                     +"${hint.id} → chunk ${hint.triggerChunkId ?: "?"}"
                 }
                 hint.card?.let { card ->
-                    ReactHTML.p { +"${card.title}: ${card.message.take(100)}" }
+                    ReactHTML.p {
+                        +"${card.title}: [min] ${card.minimal.take(60)} · [med] ${card.medium.take(60)} · [gui] ${card.guided.take(60)}"
+                    }
                 }
             }
         }

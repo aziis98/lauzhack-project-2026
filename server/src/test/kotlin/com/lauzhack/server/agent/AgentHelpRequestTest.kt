@@ -57,7 +57,7 @@ class AgentHelpRequestTest {
         val requests = jsonConfig.parseToJsonElement(msg).jsonObject["requests"]
             ?.jsonArray?.map { jsonConfig.decodeFromJsonElement(HelpRequest.serializer(), it) }
             ?: emptyList()
-        AgentOutput(requests.map { AgentAction.HintAction(requestId = it.requestId, title = "$prefix ${it.requestId}", message = "m") })
+        AgentOutput(requests.map { AgentAction.HintAction(requestId = it.requestId, title = "$prefix ${it.requestId}", minimal = "min", medium = "med", guided = "gui") })
     }
 
     private suspend fun awaitStatus(id: String, status: HintStatus): Hint {
@@ -97,7 +97,7 @@ class AgentHelpRequestTest {
         assertEquals(listOf("First ${hint.id}"), ready.history.map { it.title })
         val more = jsonConfig.decodeFromString<PageDelta>(messages.last()).requests.single()
         assertEquals("more", more.kind)
-        assertEquals(listOf("First ${hint.id}: m"), more.previousHints)
+        assertEquals(listOf("First ${hint.id}: med"), more.previousHints)
     }
 
     @Test

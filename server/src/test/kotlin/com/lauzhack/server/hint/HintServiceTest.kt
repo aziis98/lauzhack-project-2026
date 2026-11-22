@@ -78,7 +78,7 @@ class HintServiceTest {
     fun completeFillsTheReservedHint() = runBlocking {
         val hints = service()
         val id = hints.request("doc", "chunk-2", "hash-a", BoundingBox(0.0, 0.0, 100.0, 40.0))!!
-        hints.complete("doc", id, HintCard("Title", "Message"))
+        hints.complete("doc", id, HintCard("Title", "min", "med", "gui"))
         val hint = hints.hints("doc").single()
         assertEquals(HintStatus.READY, hint.status)
         assertEquals("Title", hint.card?.title)
@@ -96,7 +96,7 @@ class HintServiceTest {
     fun moreMovesTheCardToHistoryAndBackToThinking() = runBlocking {
         val hints = service()
         val id = hints.request("doc", "chunk-2", "hash-a", BoundingBox(0.0, 0.0, 100.0, 40.0))!!
-        hints.complete("doc", id, HintCard("First", "msg"))
+        hints.complete("doc", id, HintCard("First", "min", "med", "gui"))
         val (hint, fresh) = hints.reserveMore("doc", id)!!
         assertTrue(fresh)
         assertEquals(HintStatus.THINKING, hint.status)

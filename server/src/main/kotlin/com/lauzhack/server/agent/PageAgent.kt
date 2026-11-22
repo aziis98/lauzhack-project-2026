@@ -104,40 +104,38 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
 
     1. HINT — a circled "?" asks for help.
        { "kind": "hint", "id": "hint-<n>", "triggerChunkId": "<the HINT_REQUEST chunk>",
-         "title": "<= 6 words", "message": "length set by hintLevel",
-         "steps": ["..."], "relatedChunkIds": ["chunk-3"] }     // both optional
+         "title": "<= 6 words",
+         "minimal": "far from the solution",
+         "medium": "the rule and where it applies",
+         "guided": "near the solution, step by step",
+         "relatedChunkIds": ["chunk-3"] }
 
        - Unblock the NEXT step of the work nearest the "?" (usually just above or left
          of it). NEVER state or verify the final result of the exercise, at any level.
-       - DETAIL follows "hintLevel" (the latest one). Respect the length limits
-         strictly: a short hint must stay short.
-         * MINIMAL — only NAME what to use. "title": <= 3 words. "message": ONE very
-           short line, ideally an imperative naming the rule, method or theorem
-           ("Use the product rule for derivatives."), or just a single formula when
-           that says it best. No "steps", no explanation, no questions, nothing else.
-         * MEDIUM — GIVE the tool itself: state the rule, formula or theorem in its
+       - ALWAYS generate ALL THREE levels in one action. They are the SAME hint at
+         three distances from the solution; the app shows the one the student chose
+         with the slider, and the student can switch instantly. "hintLevel" only says
+         which one the student currently prefers — you still write all three.
+         * "minimal" — FAR from the solution: only NAME what to use. ONE short line,
+           ideally an imperative naming the rule, method or theorem ("Use the product
+           rule for derivatives."), or a single formula. No explanation, no question,
+           nothing else.
+         * "medium" — the tool itself: state the rule, formula or theorem in its
            general form (e.g. "(f·g)' = f'·g + f·g'") and, in a few words, where in
-           the student's work it applies. "message": 1-2 short sentences; at most 1
-           "step". Do not apply it to their expression yet.
-         * GUIDED — lead them through the step on THEIR expression: say concretely
-           what each piece is (which factors are f and g, what f' and g' are, which
-           rule each needs), how they go into the formula, and in "steps" the next
-           2-3 moves in order. Intermediate expressions are allowed; leave the final
-           simplification and the result of the exercise to the student.
-         Example — the student must differentiate A(x) = 2x·√(1−x²):
-           MINIMAL: { "title": "Product rule",
-                      "message": "Use the rule for the derivative of a product." }
-           MEDIUM:  { "title": "Product rule",
-                      "message": "(f·g)' = f'·g + f·g' — apply it to the two factors of A(x)." }
-           GUIDED:  { "title": "Product rule on A(x)",
-                      "message": "Take f = 2x and g = √(1−x²): f' = 2, and g' = −x/√(1−x²) by the chain rule.",
-                      "steps": [ "Substitute f, f', g, g' into f'·g + f·g'.",
-                                 "Put both terms over the common denominator √(1−x²) and simplify." ] }
+           the student's work it applies. 1-2 short sentences. Do not apply it to
+           their expression yet.
+         * "guided" — NEAR the solution: lead them through the step on THEIR
+           expression — say concretely what each piece is (which factors are f and g,
+           what f' and g' are), how they go into the formula, and the next 2-3 moves.
+           Intermediate expressions are allowed; leave the final simplification and
+           the result of the exercise to the student.
+       - Example — the student must differentiate A(x) = 2x·√(1−x²):
+         "minimal": "Use the product rule for derivatives."
+         "medium":  "(f·g)' = f'·g + f·g' — apply it to the two factors of A(x)."
+         "guided":  "Take f = 2x and g = √(1−x²): f' = 2, and g' = −x/√(1−x²) by the
+                     chain rule. Substitute into f'·g + f·g', then put both terms over
+                     the common denominator √(1−x²) and simplify."
        - If you already answered this same "?" and it has not changed, answer [].
-         If the student keeps asking (a new or redrawn "?"), escalate: give a MORE
-         CONCRETE hint than your previous one, one notch at a time, starting from the
-         current level — still never the final result. A level change alone is not a
-         request: it applies to the next hint you give.
        - If the work next to the "?" contains a clear mistake, you may pair the hint
          with an ERROR action.
 
@@ -152,7 +150,8 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
          (oldest first), given for the circled "?" "triggerChunkId" if set. Give a NEW
          hint for the same step, MORE CONCRETE than the last one and worded
          differently — e.g. name the exact rule, point at the exact term, or ask a
-         smaller question — but still never the solution or the result.
+         smaller question — but still never the solution or the result. As always,
+         generate all THREE levels (minimal/medium/guided) of this new hint.
        - kind "define": the student CLICKED a word (or a formula, given as LaTeX) in
          the EXERCISE STATEMENT and wants to know what it means. "term" is exactly what
          they clicked; "context" is the sentence around it.
@@ -164,22 +163,23 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
          * "title": the concept's name. The definition is always correct, in plain
            words with Unicode math; for a formula, say what it denotes and how to
            read it. Never solve the exercise or give its results.
-         * DETAIL follows "hintLevel":
-           - MINIMAL — a very concise definition: ONE short sentence (about 15 words
-             at most) in "message", nothing else: no "steps", no example, no remarks.
-           - MEDIUM — a somewhat expanded definition: 2-3 sentences in "message"
-             (the precise definition plus its key conditions or intuition). No
-             example, no "steps".
-           - GUIDED — the definition as in MEDIUM, plus ONE concrete example in
-             "steps" (1-2 items), on a simple case other than the exercise itself.
-           Example — "critical" in "Find the critical points of f":
-             MINIMAL: "A point where f'(x) = 0 or f' does not exist."
-             MEDIUM:  "A critical point of f is a point x of its domain where f'(x) = 0
-                       or f is not differentiable. Inside an interval, maxima and minima
-                       can only occur at critical points."
-             GUIDED:  the MEDIUM message, with "steps": [ "Example: f(x) = x² has
-                       f'(x) = 2x, which is 0 at x = 0, so x = 0 is a critical point
-                       (a minimum)." ]
+          * ALWAYS generate ALL THREE levels (minimal/medium/guided), as for a
+            circled "?" hint:
+            - "minimal" — a very concise definition: ONE short sentence (about 15
+              words at most), nothing else: no example, no remarks.
+            - "medium" — a somewhat expanded definition: 2-3 sentences (the precise
+              definition plus its key conditions or intuition). No example.
+            - "guided" — the definition as in "medium", plus ONE concrete example on
+              a simple case other than the exercise itself.
+            Example — "critical" in "Find the critical points of f":
+              "minimal": "A point where f'(x) = 0 or f' does not exist."
+              "medium":  "A critical point of f is a point x of its domain where
+                          f'(x) = 0 or f is not differentiable. Inside an interval,
+                          maxima and minima can only occur at critical points."
+              "guided":  "A critical point of f is a point x of its domain where
+                          f'(x) = 0 or f is not differentiable. Example: f(x) = x² has
+                          f'(x) = 2x, which is 0 at x = 0, so x = 0 is a critical
+                          point (a minimum)."
          * "Another hint" on a definition arrives as kind "more" with the definition
            in "previousHints": explain the same concept again, more simply, with an
            example.
@@ -285,6 +285,14 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
       f'(x)), never LaTeX.
     - ids are yours to choose but must be STABLE: re-emitting an action keeps its id,
       withdrawing repeats it with "remove": true.
+
+    ## Before you answer — recall
+
+    Silence is the default ([] when nothing to do). Hints are Socratic and NEVER
+    reveal the final result; every hint carries all THREE levels (minimal far from
+    the solution, guided near it). Plots use the safe JavaScript DSL with literal
+    fidelity and reference substitution. Errors point at the exact wrong symbol
+    with its bbox. ids are stable. Answer in English with Unicode math.
 """.trimIndent()
 
 class KoogPageAgent(
@@ -302,6 +310,10 @@ class KoogPageAgent(
             for (m in history) {
                 if (m.role == "user") user(m.content) else assistant(m.content)
             }
+            // rules recap: the freshest thing the model reads before answering is a
+            // compressed summary of the critical rules — models drift on long
+            // conversations even when the system prompt is re-sent every turn
+            user(RULES_RECAP)
             user(userMessage)
         }.withParams(
             OpenAIChatParams(
@@ -339,6 +351,23 @@ class KoogPageAgent(
         @Volatile
         var loggedSystemPrompt = false
 
+        /** Compressed rules, injected as the last message before each new delta so
+         *  the model reads them right before answering (models drift on long
+         *  conversations even when the system prompt is technically re-sent). */
+        val RULES_RECAP = """
+            [RULES RECAP — apply to the next turn]
+            - Answer ONLY one JSON object: {"actions": [...]}. Empty list = silence (default).
+            - Use "content" (never "raw") for reading the math.
+            - LITERAL FIDELITY: transcribe the student's math exactly; substitute
+              only references to functions defined in the conversation.
+            - HINT: all three levels (minimal/medium/guided) in ONE action. Minimal
+              is FAR from the solution, guided is NEAR it. NEVER the final result.
+            - PLOT: JS expression, Math.* only, no implicit multiplication.
+            - ERROR: only sure mistakes in complete expressions, max one per turn.
+            - Use only chunk ids from the conversation. Stable ids; "remove": true to withdraw.
+            - Hint/error text in ENGLISH; math in plain Unicode.
+        """.trimIndent()
+
         /** The JSON shape, shown to models without native JSON-schema support. */
         val EXAMPLES = listOf(
             AgentOutput(
@@ -358,8 +387,9 @@ class KoogPageAgent(
                         id = "hint-1",
                         triggerChunkId = "chunk-7",
                         title = "Product rule",
-                        message = "2x·√(1−x²) is a product of two functions: which rule do you use to derive f·g?",
-                        steps = listOf("What are f(x) and g(x) here?"),
+                        minimal = "Use the product rule for derivatives.",
+                        medium = "(f·g)' = f'·g + f·g' — apply it to the two factors of A(x).",
+                        guided = "Take f = 2x and g = √(1−x²): f' = 2, and g' = −x/√(1−x²) by the chain rule. Substitute into f'·g + f·g', then simplify.",
                         relatedChunkIds = listOf("chunk-3"),
                     )
                 )
@@ -395,8 +425,10 @@ class KoogPageAgent(
                     AgentAction.HintAction(
                         id = "hint-4",
                         requestId = "hint-4",
-                        title = "Look at the inner function",
-                        message = "√(1−x²) is a composition: what is its derivative by the chain rule?",
+                        title = "Chain rule",
+                        minimal = "Use the chain rule for the composition √(1−x²).",
+                        medium = "The chain rule: (f∘g)' = f'(g)·g'. Here the outer function is the square root and the inner is 1−x².",
+                        guided = "Write √(1−x²) as (1−x²)^(1/2). The outer derivative is (1/2)(1−x²)^(−1/2); multiply by the derivative of the inner function, −2x.",
                         relatedChunkIds = listOf("chunk-3"),
                     )
                 )

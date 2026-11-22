@@ -94,8 +94,11 @@ sealed interface AgentAction {
         /** Set when answering a [HelpRequest]: its requestId. */
         val requestId: String = "",
         val title: String,
-        val message: String,
-        val steps: List<String> = emptyList(),
+        /** The same hint at three distances from the solution; the app shows the
+         *  level the student chose with the slider. */
+        val minimal: String,
+        val medium: String,
+        val guided: String,
         val relatedChunkIds: List<String> = emptyList(),
     ) : AgentAction
 

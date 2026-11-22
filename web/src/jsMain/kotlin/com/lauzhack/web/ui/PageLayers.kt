@@ -29,6 +29,9 @@ internal var canvasEditor: com.lauzhack.web.tldraw.Editor? = null
 /** Current height of the page (it grows with the content). */
 internal var canvasPageHeight: Double = 0.0
 
+/** The open document's hint detail level (the slider); hint cards render this level. */
+internal var canvasHintLevel: com.lauzhack.shared.hint.HintLevel = com.lauzhack.shared.hint.HintLevel.MEDIUM
+
 private val pageApi = DrawingApi()
 
 /** Size of one square of the paper grid, in page units. */

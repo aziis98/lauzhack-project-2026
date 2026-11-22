@@ -132,7 +132,7 @@ class AgentService(
                     requestId = hint.id,
                     kind = "more",
                     triggerChunkId = hint.triggerChunkId,
-                    previousHints = hint.history.map { "${it.title}: ${it.message}" },
+                    previousHints = hint.history.map { "${it.title}: ${it.medium}" },
                 ),
             )
         }
@@ -394,8 +394,9 @@ class AgentService(
 
     private fun AgentAction.HintAction.toCard() = HintCard(
         title = title.trim(),
-        message = message.trim(),
-        steps = steps.map { it.trim() }.filter { it.isNotEmpty() },
+        minimal = minimal.trim(),
+        medium = medium.trim(),
+        guided = guided.trim(),
         relatedChunkIds = relatedChunkIds,
     )
 

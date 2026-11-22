@@ -2,6 +2,7 @@ package com.lauzhack.web.ui
 
 import com.lauzhack.shared.api.DrawingApi
 import com.lauzhack.shared.hint.Hint
+import com.lauzhack.shared.hint.HintLevel
 import com.lauzhack.shared.hint.HintStatus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -147,13 +148,13 @@ private val HintCardView = FC<HintCardProps> { props ->
             HintStatus.THINKING -> ReactHTML.div { className = ClassName("hint-dots"); +"• • •" }
             HintStatus.FAILED -> ReactHTML.p { className = ClassName("hint-message"); +(hint.error ?: "Error") }
             HintStatus.READY -> hint.card?.let { card ->
-                ReactHTML.p { className = ClassName("hint-message"); +card.message }
-                if (card.steps.isNotEmpty()) {
-                    ReactHTML.ul {
-                        className = ClassName("hint-steps")
-                        for (step in card.steps) ReactHTML.li { +step }
-                    }
+                // show the level the student chose with the slider
+                val message = when (canvasHintLevel) {
+                    HintLevel.MINIMAL -> card.minimal
+                    HintLevel.MEDIUM -> card.medium
+                    HintLevel.GUIDED -> card.guided
                 }
+                ReactHTML.p { className = ClassName("hint-message"); +message }
             }
         }
 
