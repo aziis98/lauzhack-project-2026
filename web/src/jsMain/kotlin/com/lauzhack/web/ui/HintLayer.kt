@@ -4,6 +4,7 @@ import com.lauzhack.shared.api.DrawingApi
 import com.lauzhack.shared.hint.Hint
 import com.lauzhack.shared.hint.HintLevel
 import com.lauzhack.shared.hint.HintStatus
+import com.lauzhack.web.markdown.renderMathMarkdown
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.MainScope
@@ -154,7 +155,12 @@ private val HintCardView = FC<HintCardProps> { props ->
                     HintLevel.MEDIUM -> card.medium
                     HintLevel.GUIDED -> card.guided
                 }
-                ReactHTML.p { className = ClassName("hint-message"); +message }
+                ReactHTML.div {
+                    className = ClassName("hint-message")
+                    val inner: dynamic = js("({})")
+                    inner.__html = renderMathMarkdown(message)
+                    asDynamic().dangerouslySetInnerHTML = inner
+                }
             }
         }
 

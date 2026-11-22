@@ -131,12 +131,12 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
            what f' and g' are), how they go into the formula, and the next 2-3 moves.
            Intermediate expressions are allowed; leave the final simplification and
            the result of the exercise to the student.
-       - Example — the student must differentiate A(x) = 2x·√(1−x²):
-         "minimal": "Use the product rule for derivatives."
-         "medium":  "(f·g)' = f'·g + f·g' — apply it to the two factors of A(x)."
-         "guided":  "Take f = 2x and g = √(1−x²): f' = 2, and g' = −x/√(1−x²) by the
-                     chain rule. Substitute into f'·g + f·g', then put both terms over
-                     the common denominator √(1−x²) and simplify."
+       - Example — the student must differentiate ${'$'}A(x) = 2x \sqrt{1-x^2}${'$'}:
+         "minimal": "Use the **product rule** for derivatives."
+         "medium":  "${'$'}(f \cdot g)' = f' \cdot g + f \cdot g'${'$'} — apply it to the two factors of ${'$'}A(x)${'$'}."
+         "guided":  "Take ${'$'}f = 2x${'$'} and ${'$'}g = \sqrt{1-x^2}${'$'}: ${'$'}f' = 2${'$'}, and ${'$'}g' = -\frac{x}{\sqrt{1-x^2}}${'$'} by the
+                     chain rule. Substitute into ${'$'}f' \cdot g + f \cdot g'${'$'}, then put both terms over
+                     the common denominator ${'$'}\sqrt{1-x^2}${'$'} and simplify."
        - If you already answered this same "?" and it has not changed, answer [].
        - If the work next to the "?" contains a clear mistake, you may pair the hint
          with an ERROR action.
@@ -163,8 +163,8 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
            "relative maximum" means "local maximum", "inscribed" in "rectangle
            inscribed in a semicircle" means "inscribed". Clarify that whole
            concept, as it is used in THIS sentence, not the isolated word.
-         * "title": the concept's name. The definition is always correct, in plain
-           words with Unicode math; for a formula, say what it denotes and how to
+         * "title": the concept's name. The definition is always correct, in Markdown
+           with LaTeX math (${'$'}...${'$'}); for a formula, say what it denotes and how to
            read it. Never solve the exercise or give its results.
           * ALWAYS generate ALL THREE levels (minimal/medium/guided), as for a
             circled "?" hint:
@@ -297,8 +297,11 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
     - Use ONLY chunk ids that exist in this conversation; never invent content that is
       not on the page; never assume steps the student did not write.
     - Write hint and error text in ENGLISH (regardless of the student's
-      language, for now); math inside them in plain Unicode (x², √, π,
-      f'(x)), never LaTeX.
+      language, for now):
+      * HINT text (`minimal`, `medium`, `guided`): write in Markdown with LaTeX math
+        (${'$'}...${'$'} for inline math, ${'$'}${'$'}...${'$'}${'$'} for display math).
+      * ERROR text (`message`, `suggestion`): plain text with Unicode math (x², √, π,
+        f'(x)), never LaTeX.
     - ids are yours to choose but must be STABLE: re-emitting an action keeps its id,
       withdrawing repeats it with "remove": true.
 
@@ -309,7 +312,8 @@ internal val PAGE_AGENT_SYSTEM_PROMPT = """
     help ("more"); every hint carries all THREE levels (minimal far from the solution,
     guided near it). Plots use the safe JavaScript DSL with literal
     fidelity and reference substitution. Errors point at the exact wrong symbol
-    with its bbox. ids are stable. Answer in English with Unicode math.
+    with its bbox. ids are stable. Answer in English: Markdown + LaTeX for hints,
+    plain Unicode math for errors.
 """.trimIndent()
 
 class KoogPageAgent(
@@ -383,7 +387,7 @@ class KoogPageAgent(
             - PLOT: JS expression, Math.* only, no implicit multiplication.
             - ERROR: only sure mistakes in complete expressions, max one per turn.
             - Use only chunk ids from the conversation. Stable ids; "remove": true to withdraw.
-            - Hint/error text in ENGLISH; math in plain Unicode.
+            - Hint text in ENGLISH using Markdown + LaTeX (${'$'}...${'$'} / ${'$'}${'$'}...${'$'}${'$'}); error text in ENGLISH with plain Unicode math.
         """.trimIndent()
 
         /** The JSON shape, shown to models without native JSON-schema support. */
@@ -405,9 +409,9 @@ class KoogPageAgent(
                         id = "hint-1",
                         triggerChunkId = "chunk-7",
                         title = "Product rule",
-                        minimal = "Use the product rule for derivatives.",
-                        medium = "(f·g)' = f'·g + f·g' — apply it to the two factors of A(x).",
-                        guided = "Take f = 2x and g = √(1−x²): f' = 2, and g' = −x/√(1−x²) by the chain rule. Substitute into f'·g + f·g', then simplify.",
+                        minimal = "Use the **product rule** for derivatives.",
+                        medium = "${'$'}(f \\cdot g)' = f' \\cdot g + f \\cdot g'${'$'} — apply it to the two factors of ${'$'}A(x)${'$'}.",
+                        guided = "Take ${'$'}f = 2x${'$'} and ${'$'}g = \\sqrt{1-x^2}${'$'}: ${'$'}f' = 2${'$'}, and ${'$'}g' = -\\frac{x}{\\sqrt{1-x^2}}${'$'} by the chain rule. Substitute into ${'$'}f' \\cdot g + f \\cdot g'${'$'}, then simplify.",
                         relatedChunkIds = listOf("chunk-3"),
                     )
                 )
@@ -444,9 +448,9 @@ class KoogPageAgent(
                         id = "hint-4",
                         requestId = "hint-4",
                         title = "Chain rule",
-                        minimal = "Use the chain rule for the composition √(1−x²).",
-                        medium = "The chain rule: (f∘g)' = f'(g)·g'. Here the outer function is the square root and the inner is 1−x².",
-                        guided = "Write √(1−x²) as (1−x²)^(1/2). The outer derivative is (1/2)(1−x²)^(−1/2); multiply by the derivative of the inner function, −2x.",
+                        minimal = "Use the **chain rule** for the composition ${'$'}\\sqrt{1-x^2}${'$'}.",
+                        medium = "The chain rule: ${'$'}(f \\circ g)' = f'(g) \\cdot g'${'$'}. Here the outer function is the square root and the inner is ${'$'}1-x^2${'$'}.",
+                        guided = "Write ${'$'}\\sqrt{1-x^2}${'$'} as ${'$'}(1-x^2)^{1/2}${'$'}. The outer derivative is ${'$'}\\frac{1}{2}(1-x^2)^{-1/2}${'$'}; multiply by the derivative of the inner function, ${'$'}-2x${'$'}.",
                         relatedChunkIds = listOf("chunk-3"),
                     )
                 )

@@ -719,6 +719,11 @@ input:focus {
 .plot-error { color: #c92a2a; font-size: 13px; margin: 4px 0; }
 
 .hint-message { margin: 8px 0 0; }
+.hint-message p { margin: 0 0 6px; }
+.hint-message p:last-child { margin-bottom: 0; }
+.hint-message ol, .hint-message ul { margin: 4px 0; padding-left: 18px; }
+.hint-message li { margin: 2px 0; }
+.hint-message .katex-display { margin: 8px 0; overflow-x: auto; }
 .hint-steps { margin: 6px 0 0; padding-left: 18px; color: #52525b; }
 .hint-steps li { margin-top: 2px; }
 .hint-dots { margin-top: 6px; color: #d97706; letter-spacing: 2px; animation: hint-pulse 1s infinite; }
