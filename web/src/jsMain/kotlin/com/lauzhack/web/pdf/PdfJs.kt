@@ -1,4 +1,4 @@
-@file:JsModule("pdfjs-dist")
+@file:JsModule("pdfjs-dist/legacy/build/pdf.mjs")
 
 package com.lauzhack.web.pdf
 

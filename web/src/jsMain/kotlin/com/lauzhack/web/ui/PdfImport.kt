@@ -373,22 +373,27 @@ private val PdfPageView = FC<PdfPageViewProps> { props ->
     val cssWidth = props.width
     var cssHeight by useState(cssWidth * 1.414)
     var drag by useState<Drag?>(null)
+    var renderError by useState<String?>(null)
 
     useEffectOnce {
-        val page = await<dynamic>(props.pdf.getPage(props.pageNumber))
-        val base = page.getViewport(scaleOptions(1.0))
-        val cssScale = cssWidth / (base.width as Double)
-        cssHeight = (base.height as Double) * cssScale
-        val dpr = (js("window.devicePixelRatio") as? Double) ?: 1.0
-        val viewport = page.getViewport(scaleOptions(cssScale * dpr))
-        val canvas: dynamic = canvasRef.current ?: return@useEffectOnce
-        canvas.width = ceil(viewport.width as Double).toInt()
-        canvas.height = ceil(viewport.height as Double).toInt()
-        val params = obj()
-        params.canvas = canvas
-        params.canvasContext = canvas.getContext("2d")
-        params.viewport = viewport
-        await<dynamic>(page.render(params).promise)
+        try {
+            val page = await<dynamic>(props.pdf.getPage(props.pageNumber))
+            val base = page.getViewport(scaleOptions(1.0))
+            val cssScale = cssWidth / (base.width as Double)
+            cssHeight = (base.height as Double) * cssScale
+            val dpr = (js("window.devicePixelRatio") as? Double) ?: 1.0
+            val viewport = page.getViewport(scaleOptions(cssScale * dpr))
+            val canvas: dynamic = canvasRef.current ?: return@useEffectOnce
+            canvas.width = ceil(viewport.width as Double).toInt()
+            canvas.height = ceil(viewport.height as Double).toInt()
+            val params = obj()
+            params.canvas = canvas
+            params.canvasContext = canvas.getContext("2d")
+            params.viewport = viewport
+            await<dynamic>(page.render(params).promise)
+        } catch (e: Throwable) {
+            renderError = "Could not render page ${props.pageNumber}: ${e.message}"
+        }
     }
 
     fun local(event: dynamic): Pair<Double, Double> {
@@ -412,6 +417,7 @@ private val PdfPageView = FC<PdfPageViewProps> { props ->
             c.height = "${cssHeight}px"
             asDynamic().style = c
         }
+        renderError?.let { ReactHTML.p { className = ClassName("pdf-error"); +it } }
 
         // selection overlay (mouse, finger and pen)
         ReactHTML.div {
