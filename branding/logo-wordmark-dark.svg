@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 256" width="800" height="256" role="img" aria-label="Hintsight">
   <title>Hintsight</title>
 <!-- closed shape of the hand-drawn loop (fill and hard shadow) -->
-  <path d="M156 46 C206 54 230 98 222 142 C214 192 168 224 120 220 C68 216 32 178 34 126 C36 74 80 34 132 30 C146 29 152 40 156 46 Z"
+  <path d="M132 30 C186 27 230 84 222 142 C214 192 168 224 120 220 C68 216 32 178 34 126 C36 74 80 34 132 30 Z"
         transform="translate(9 9)" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="10" stroke-linejoin="round"/>
-  <path d="M156 46 C206 54 230 98 222 142 C214 192 168 224 120 220 C68 216 32 178 34 126 C36 74 80 34 132 30 C146 29 152 40 156 46 Z"
+  <path d="M132 30 C186 27 230 84 222 142 C214 192 168 224 120 220 C68 216 32 178 34 126 C36 74 80 34 132 30 Z"
         fill="#FFE48B"/>
   <!-- the pen stroke itself, overshooting its start -->
   <path d="M156 46 C206 54 230 98 222 142 C214 192 168 224 120 220 C68 216 32 178 34 126 C36 74 80 34 132 30 C168 27 198 38 216 58"
