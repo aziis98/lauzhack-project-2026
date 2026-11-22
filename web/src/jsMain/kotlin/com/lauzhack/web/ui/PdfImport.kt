@@ -86,6 +86,7 @@ val PdfImport = FC<PdfImportProps> { props ->
     var pageWidth by useState<Double?>(null)
 
     useEffectOnce {
+        ensureReadableStreamAsyncIterator()
         val column = (pagesRef.current?.asDynamic()?.clientWidth as? Number)?.toDouble() ?: MAX_PAGE_CSS_WIDTH
         pageWidth = min(MAX_PAGE_CSS_WIDTH, column - 32)
         GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -296,6 +297,31 @@ private suspend fun convertWithRetry(region: Region): String {
 }
 
 private class Region(val pngBase64: String, val text: String)
+
+/** Safari/iPadOS lacks ReadableStream[Symbol.asyncIterator], which pdf.js getTextContent() uses via `for await`. */
+private fun ensureReadableStreamAsyncIterator() {
+    js(
+        """
+        if (typeof ReadableStream !== 'undefined' && !ReadableStream.prototype[Symbol.asyncIterator]) {
+            ReadableStream.prototype[Symbol.asyncIterator] = function () {
+                var reader = this.getReader();
+                return {
+                    next: function () {
+                        return reader.read().then(function (r) {
+                            if (r.done) reader.releaseLock();
+                            return r;
+                        });
+                    },
+                    return: function () {
+                        reader.releaseLock();
+                        return Promise.resolve({ done: true, value: undefined });
+                    }
+                };
+            };
+        }
+        """
+    )
+}
 
 /** Renders the selected area at high resolution and collects the PDF text inside it. */
 private suspend fun cropRegion(pdf: dynamic, rect: PageRect): Region {
